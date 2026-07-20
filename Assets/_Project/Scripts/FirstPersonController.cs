@@ -23,6 +23,18 @@ namespace Antigravity
         private bool _isGrounded;
         private bool _isCursorLocked = true;
 
+        public bool isInspecting { get; set; } = false;
+
+        public bool IsCursorLocked
+        {
+            get => _isCursorLocked;
+            set
+            {
+                _isCursorLocked = value;
+                UpdateCursorState();
+            }
+        }
+
         void Start()
         {
             _characterController = GetComponent<CharacterController>();
@@ -47,6 +59,11 @@ namespace Antigravity
             }
 
             if (!_isCursorLocked)
+            {
+                return;
+            }
+
+            if (isInspecting)
             {
                 return;
             }

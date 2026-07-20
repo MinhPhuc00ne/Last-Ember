@@ -27,10 +27,40 @@ namespace Antigravity.Editor
             {
                 AssetDatabase.MoveAsset("Assets/ALP_Assets", "Assets/ThirdParty/ALP_Assets");
             }
+            if (AssetDatabase.IsValidFolder("Assets/BobGrandmaster"))
+            {
+                AssetDatabase.MoveAsset("Assets/BobGrandmaster", "Assets/ThirdParty/BobGrandmaster");
+            }
             if (AssetDatabase.IsValidFolder("Assets/ADG_Textures"))
             {
                 AssetDatabase.MoveAsset("Assets/ADG_Textures", "Assets/ThirdParty/ADG_Textures");
             }
+            if (AssetDatabase.IsValidFolder("Assets/RawWoodenFurnitureFree"))
+            {
+                AssetDatabase.MoveAsset("Assets/RawWoodenFurnitureFree", "Assets/ThirdParty/RawWoodenFurnitureFree");
+            }
+            if (AssetDatabase.IsValidFolder("Assets/B3DArt"))
+            {
+                AssetDatabase.MoveAsset("Assets/B3DArt", "Assets/ThirdParty/B3DArt");
+            }
+            if (AssetDatabase.IsValidFolder("Assets/Assets/Radio"))
+            {
+                AssetDatabase.MoveAsset("Assets/Assets/Radio", "Assets/ThirdParty/Radio");
+            }
+            
+            // Cleanup extra Assets folder if it is empty after move
+            string extraAssetsPath = Path.Combine(Application.dataPath, "Assets");
+            if (AssetDatabase.IsValidFolder("Assets/Assets") && Directory.Exists(extraAssetsPath) && Directory.GetFileSystemEntries(extraAssetsPath).Length == 0)
+            {
+                AssetDatabase.DeleteAsset("Assets/Assets");
+            }
+
+            if (AssetDatabase.IsValidFolder("Assets/SpaceZeta_RusticSmallCabinet"))
+            {
+                AssetDatabase.MoveAsset("Assets/SpaceZeta_RusticSmallCabinet", "Assets/ThirdParty/SpaceZeta_RusticSmallCabinet");
+            }
+
+
 
             UpgradeMaterialsToURPLit();
             
@@ -78,12 +108,72 @@ namespace Antigravity.Editor
             {
                 Debug.LogError("Antigravity: Could not find Outdoor Ground Textures at: " + groundPath);
             }
+
+            // 4. Import Raw Wooden Furniture Free
+            string furniturePath = Path.Combine(appData, @"Unity\Asset Store-5.x\AmbiMesh\3D ModelsPropsFurniture\Raw Wooden Furniture Free.unitypackage");
+            if (File.Exists(furniturePath))
+            {
+                Debug.Log("Antigravity: Importing Raw Wooden Furniture...");
+                AssetDatabase.ImportPackage(furniturePath, false);
+            }
+            else
+            {
+                Debug.LogError("Antigravity: Could not find Raw Wooden Furniture at: " + furniturePath);
+            }
+
+            // 5. Import Black Cherry Firewood
+            string firewoodPath = Path.Combine(appData, @"Unity\Asset Store-5.x\Baldinoboy\3D ModelsProps\Black Cherry Firewood 01.unitypackage");
+            if (File.Exists(firewoodPath))
+            {
+                Debug.Log("Antigravity: Importing Black Cherry Firewood...");
+                AssetDatabase.ImportPackage(firewoodPath, false);
+            }
+            else
+            {
+                Debug.LogError("Antigravity: Could not find Black Cherry Firewood at: " + firewoodPath);
+            }
+
+            // 6. Import Old Radio P
+            string radioPath = Path.Combine(appData, @"Unity\Asset Store-5.x\Jell3D\3D ModelsProps\Old Radio P.unitypackage");
+            if (File.Exists(radioPath))
+            {
+                Debug.Log("Antigravity: Importing Old Radio P...");
+                AssetDatabase.ImportPackage(radioPath, false);
+            }
+            else
+            {
+                Debug.LogError("Antigravity: Could not find Old Radio P at: " + radioPath);
+            }
+
+            // 7. Import Rustic Small Cabinet
+            string cabinetPath = Path.Combine(appData, @"Unity\Asset Store-5.x\SpaceZeta\3D ModelsPropsFurniture\Rustic Small Cabinet.unitypackage");
+            if (File.Exists(cabinetPath))
+            {
+                Debug.Log("Antigravity: Importing Rustic Small Cabinet...");
+                AssetDatabase.ImportPackage(cabinetPath, false);
+            }
+            else
+            {
+                Debug.LogError("Antigravity: Could not find Rustic Small Cabinet at: " + cabinetPath);
+            }
+
+            // 8. Import MN D (Monster)
+            string monsterPath = Path.Combine(appData, @"Unity\Asset Store-5.x\BobGrandmaster\3D ModelsCharactersCreatures\MN D.unitypackage");
+            if (File.Exists(monsterPath))
+            {
+                Debug.Log("Antigravity: Importing MN D (Monster)...");
+                AssetDatabase.ImportPackage(monsterPath, false);
+            }
+            else
+            {
+                Debug.LogWarning("Antigravity: Could not find MN D at: " + monsterPath);
+            }
         }
 
         [MenuItem("Tools/Antigravity/Upgrade Imported Materials to URP")]
         public static void UpgradeMaterialsToURPLit()
         {
-            // Find all materials in the imported Assets/ALP_Assets folder
+            // Find all materials in the imported Assets folder
             string[] guids = AssetDatabase.FindAssets("t:Material", new[] { "Assets" });
             int upgradedCount = 0;
 
@@ -91,9 +181,8 @@ namespace Antigravity.Editor
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 
-                // Only upgrade materials inside ALP_Assets or a dogs life software
-                if (!path.Contains("Assets/ALP_Assets") && !path.Contains("Assets/A dogs life software") &&
-                    !path.Contains("Assets/ThirdParty/ALP_Assets") && !path.Contains("Assets/ThirdParty/A dogs life software")) continue;
+                // Only upgrade materials inside ThirdParty folder
+                if (!path.Contains("Assets/ThirdParty")) continue;
 
                 Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (mat == null) continue;
@@ -157,6 +246,60 @@ namespace Antigravity.Editor
             // Refresh EditorScene
             EditorApplication.QueuePlayerLoopUpdate();
             SceneView.RepaintAll();
+        }
+
+        [MenuItem("Tools/Antigravity/Fix Monster Material")]
+        public static void FixMonster()
+        {
+
+
+            // Upgrade all materials inside Assets/ThirdParty/BobGrandmaster/MN D
+            string[] guids = AssetDatabase.FindAssets("t:Material", new[] { "Assets" });
+            int upgradedCount = 0;
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!path.Contains("BobGrandmaster") && !path.Contains("MN D")) continue;
+
+                Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (mat == null) continue;
+
+                Shader urpShader = Shader.Find("Universal Render Pipeline/Lit");
+                if (urpShader != null)
+                {
+                    // Get textures
+                    Texture mainTex = mat.HasProperty("_MainTex") ? mat.GetTexture("_MainTex") : null;
+                    Color mainColor = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
+                    if (mat.HasProperty("_BaseColor")) mainColor = mat.GetColor("_BaseColor");
+
+                    mat.shader = urpShader;
+                    if (mainTex != null) mat.SetTexture("_BaseMap", mainTex);
+                    mat.SetColor("_BaseColor", mainColor);
+
+                    // Set standard smoothness and metallic
+                    mat.SetFloat("_Smoothness", 0.1f);
+                    mat.SetFloat("_Metallic", 0.0f);
+
+                    // Also try normal map if exists
+                    if (mat.HasProperty("_BumpMap"))
+                    {
+                        Texture bumpMap = mat.GetTexture("_BumpMap");
+                        if (bumpMap != null)
+                        {
+                            mat.SetTexture("_BumpMap", bumpMap);
+                            mat.EnableKeyword("_NORMALMAP");
+                        }
+                    }
+
+                    EditorUtility.SetDirty(mat);
+                    upgradedCount++;
+                }
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log($"Antigravity: Upgraded {upgradedCount} monster materials to URP Lit!");
+
+            // Force Setup scene to run again to update references
+            SetupFirstPersonScene.RunManualSetup();
         }
     }
 }
