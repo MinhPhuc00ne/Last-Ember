@@ -64,7 +64,9 @@ namespace Antigravity.Editor
                 }
             }
 
-            if (player != null && terrain != null && grass != null && forest != null && house != null && shadowFigure != null && fence != null && campsite != null && monster == null && !isPrimitiveHouse && houseScaledCorrectly && !needsTerrainTexture && !force)
+            bool needsExpansion = (fence != null && fence.transform.childCount < 300) || (forest != null && forest.transform.childCount < 2000);
+
+            if (player != null && terrain != null && grass != null && forest != null && house != null && shadowFigure != null && fence != null && campsite != null && monster == null && !isPrimitiveHouse && houseScaledCorrectly && !needsTerrainTexture && !needsExpansion && !force)
             {
                 // Already setup with prefabs and textures, skip auto setup
                 return;
@@ -108,8 +110,8 @@ namespace Antigravity.Editor
                 player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 player.name = "Player";
             }
-            float spawnY = GetTerrainHeight(0f, -108f) + 1.2f;
-            player.transform.position = new Vector3(0f, spawnY, -108f);
+            float spawnY = GetTerrainHeight(0f, -143f) + 1.2f;
+            player.transform.position = new Vector3(0f, spawnY, -143f);
             player.transform.rotation = Quaternion.Euler(0f, 0f, 0f); // Face North into the forest entrance opening
             player.transform.localScale = Vector3.one;
 
@@ -407,16 +409,6 @@ namespace Antigravity.Editor
         {
             float height = 0f;
 
-            // Lake centered at (70, -70) with radius 80m
-            float ldx = xPos - 70f;
-            float ldz = zPos - (-70f);
-            float distToLake = Mathf.Sqrt(ldx * ldx + ldz * ldz);
-            if (distToLake < 80f)
-            {
-                float lakeDepressionFactor = Mathf.SmoothStep(0f, 1f, distToLake / 80f);
-                height = Mathf.Lerp(-6.0f, 0f, lakeDepressionFactor);
-            }
-
             // Forest floor rolling hills and bumpy terrain
             float hillNoise1 = Mathf.PerlinNoise(xPos * 0.007f + 42f, zPos * 0.007f + 42f) * 6.5f;
             float hillNoise2 = Mathf.PerlinNoise(xPos * 0.022f + 142f, zPos * 0.022f + 142f) * 3.0f;
@@ -427,7 +419,7 @@ namespace Antigravity.Editor
             float distToHouse = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(65f, 30f));
             if (distToHouse < 20f) flatMask *= Mathf.SmoothStep(0f, 1f, (distToHouse - 8f) / 12f);
 
-            float distToEnt = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(0f, -108f));
+            float distToEnt = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(0f, -143f));
             if (distToEnt < 18f) flatMask *= Mathf.SmoothStep(0f, 1f, (distToEnt - 6f) / 12f);
 
             float distToCamp = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(-20f, 22f));
@@ -459,10 +451,10 @@ namespace Antigravity.Editor
             }
 
             // High Mountains surrounding the valley
-            float xMin = -300f;
-            float xMax = 300f;
-            float zMin = -180f;
-            float zMax = 350f;
+            float xMin = -280f;
+            float xMax = 280f;
+            float zMin = -160f;
+            float zMax = 330f;
 
             float distX = 0f;
             if (xPos > xMax) distX = xPos - xMax;
@@ -580,8 +572,8 @@ namespace Antigravity.Editor
             Mesh quadMesh = tempQuad.GetComponent<MeshFilter>().sharedMesh;
             Object.DestroyImmediate(tempQuad);
 
-            int grassCount = 14000;
-            float fieldSize = 900f;
+            int grassCount = 35000;
+            float fieldSize = 1000f;
             float houseScale = HouseScaleVal;
 
             for (int i = 0; i < grassCount; i++)
@@ -598,10 +590,6 @@ namespace Antigravity.Editor
                 // Campsite clearance
                 float distToCamp = Mathf.Sqrt((x - (-20f)) * (x - (-20f)) + (z - 22f) * (z - 22f));
                 if (distToCamp < 5f) continue;
-
-                // Lake clearance
-                float distToLake = Mathf.Sqrt((x - 70f) * (x - 70f) + (z - (-70f)) * (z - (-70f)));
-                if (distToLake < 78f) continue;
 
                 // Temple clearance
                 float distToTemple = Mathf.Sqrt(x * x + (z - 250f) * (z - 250f));
@@ -815,8 +803,8 @@ namespace Antigravity.Editor
 
             if (pinePrefabs.Count > 0)
             {
-                int treeCount = 1300; // Dense realistic pine forest
-                float fieldSize = 900f;
+                int treeCount = 3500; // Dense realistic pine forest
+                float fieldSize = 1000f;
 
                 for (int i = 0; i < treeCount; i++)
                 {
@@ -824,12 +812,12 @@ namespace Antigravity.Editor
                     float z = Random.Range(-fieldSize / 2f, fieldSize / 2f);
 
                     // 1. Player Spawn & Fence Entrance Clearance
-                    float distToPlayer = Vector2.Distance(new Vector2(x, z), new Vector2(0f, -108f));
+                    float distToPlayer = Vector2.Distance(new Vector2(x, z), new Vector2(0f, -143f));
                     if (distToPlayer < 20f) continue;
-                    if (Mathf.Abs(x) < 8f && z < -90f) continue;
+                    if (Mathf.Abs(x) < 8f && z < -125f) continue;
 
                     // 2. Outer Fence Boundary Clearance
-                    if (x < -180f || x > 180f || z < -100f || z > 258f) continue;
+                    if (x < -245f || x > 245f || z < -130f || z > 305f) continue;
 
                     // 3. House Clearance (House at 65, 30)
                     float distToHouse = Vector2.Distance(new Vector2(x, z), new Vector2(65f, 30f));
@@ -838,10 +826,6 @@ namespace Antigravity.Editor
                     // 4. Campsite Clearance (Campsite at -20, 22)
                     float distToCamp = Vector2.Distance(new Vector2(x, z), new Vector2(-20f, 22f));
                     if (distToCamp < 25f) continue;
-
-                    // 5. Lake Basin Clearance (Lake at 70, -70)
-                    float distToLake = Vector2.Distance(new Vector2(x, z), new Vector2(70f, -70f));
-                    if (distToLake < 82f) continue;
 
                     // 6. Ancient Temple Clearance (Temple at 0, 250)
                     float distToTemple = Vector2.Distance(new Vector2(x, z), new Vector2(0f, 250f));
@@ -869,6 +853,29 @@ namespace Antigravity.Editor
                     float scale = Random.Range(0.85f, 1.45f);
                     tree.transform.localScale = new Vector3(scale, scale, scale);
                     tree.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+                }
+
+                // Outer Background Forest Trees on mountain slopes surrounding the fence
+                int bgTreeCount = 1500;
+                for (int i = 0; i < bgTreeCount; i++)
+                {
+                    float x = Random.Range(-450f, 450f);
+                    float z = Random.Range(-250f, 420f);
+
+                    // Only place outside the inner fence perimeter
+                    if (x >= -248f && x <= 248f && z >= -133f && z <= 308f) continue;
+
+                    float terrainHeight = GetTerrainHeight(x, z);
+
+                    GameObject chosenPrefab = pinePrefabs[Random.Range(0, pinePrefabs.Count)];
+                    GameObject bgTree = PrefabUtility.InstantiatePrefab(chosenPrefab) as GameObject;
+                    bgTree.name = "BGTree_" + i;
+                    bgTree.transform.SetParent(forest.transform);
+                    bgTree.transform.position = new Vector3(x, terrainHeight, z);
+
+                    float scale = Random.Range(1.1f, 1.8f);
+                    bgTree.transform.localScale = new Vector3(scale, scale, scale);
+                    bgTree.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
                 }
 
                 // Place Special Tree behind School with key hidden under roots (per Kịch bản.docx)
@@ -912,10 +919,6 @@ namespace Antigravity.Editor
 
                     // Do not spawn trees inside the house bounds or yard (House is at 0, 15, scaled 1.6f)
                     if (Mathf.Abs(x) < 18f && z > 0f && z < 32f) continue;
-
-                    // Do not spawn trees inside the lake clearing centered at (70, -70)
-                    float distToLake = Mathf.Sqrt((x - 70f) * (x - 70f) + (z - (-70f)) * (z - (-70f)));
-                    if (distToLake < 80f) continue;
 
                     // Do not spawn trees inside the giant temple clearing centered at (0, 250)
                     float distToTemple = Mathf.Sqrt(x * x + (z - 250f) * (z - 250f));
@@ -964,10 +967,10 @@ namespace Antigravity.Editor
                 fencePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fencePrefabPath);
             }
 
-            float minX = -180f;
-            float maxX = 180f;
-            float minZ = -100f;
-            float maxZ = 260f;
+            float minX = -250f;
+            float maxX = 250f;
+            float minZ = -135f;
+            float maxZ = 310f;
             float step = 3.0f; // Distance per segment
 
             Material fallbackMat = null;
@@ -1022,12 +1025,41 @@ namespace Antigravity.Editor
             }
         }
 
+        private static Vector3 GetTerrainNormal(float x, float z)
+        {
+            float eps = 0.5f;
+            float hL = GetTerrainHeight(x - eps, z);
+            float hR = GetTerrainHeight(x + eps, z);
+            float hD = GetTerrainHeight(x, z - eps);
+            float hU = GetTerrainHeight(x, z + eps);
+            Vector3 n = new Vector3(hL - hR, 2f * eps, hD - hU);
+            return n.normalized;
+        }
+
         private static void SpawnFencePiece(GameObject prefab, Transform parent, Vector3 basePos, Quaternion rot)
         {
-            float y = GetTerrainHeight(basePos.x, basePos.z);
+            float x = basePos.x;
+            float z = basePos.z;
+
+            // Mountain Avoidance: if terrain height at (x, z) exceeds valley threshold (> 10m),
+            // pull position inward toward valley center (0, 30) until terrain height is <= 10m
+            Vector2 center = new Vector2(0f, 30f);
+            int safety = 0;
+            while (GetTerrainHeight(x, z) > 10f && safety < 25)
+            {
+                Vector2 dirToCenter = (center - new Vector2(x, z)).normalized;
+                x += dirToCenter.x * 1.5f;
+                z += dirToCenter.y * 1.5f;
+                safety++;
+            }
+
+            float y = GetTerrainHeight(x, z);
+            Vector3 normal = GetTerrainNormal(x, z);
+            Quaternion slopeRot = Quaternion.FromToRotation(Vector3.up, normal);
+
             GameObject piece = PrefabUtility.InstantiatePrefab(prefab, parent) as GameObject;
-            piece.transform.position = new Vector3(basePos.x, y, basePos.z);
-            piece.transform.rotation = rot;
+            piece.transform.position = new Vector3(x, y, z);
+            piece.transform.rotation = slopeRot * rot;
 
             Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
             if (urpLit == null) urpLit = Shader.Find("Standard");
@@ -1642,7 +1674,7 @@ namespace Antigravity.Editor
             CreateLake();
 
             // 1c. Create Dirt Trails (Main trail from spawn/fence entrance leading into forest to central 4-way intersection and branching out)
-            CreatePath("Path_Spawn_To_Intersection", new Vector3(0f, 0f, -108f), new Vector3(0f, 0f, 30f), 3.0f);
+            CreatePath("Path_Spawn_To_Intersection", new Vector3(0f, 0f, -143f), new Vector3(0f, 0f, 30f), 3.0f);
             CreatePath("Path_Intersection_To_House", new Vector3(0f, 0f, 30f), new Vector3(60f, 0f, 30f), 2.5f);
             CreatePath("Path_Intersection_To_Lake", new Vector3(0f, 0f, 30f), new Vector3(-65f, 0f, -30f), 2.5f);
             CreatePath("Path_Intersection_To_School", new Vector3(0f, 0f, 30f), new Vector3(-120f, 0f, 150f), 2.5f);
@@ -1694,68 +1726,17 @@ namespace Antigravity.Editor
                 Object.DestroyImmediate(water);
             }
 
-            // Create flat water plane using Unity's built-in Plane primitive
-            water = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            water.name = "LakeWater";
-            
-            // Set collider as trigger so player doesn't walk on water
-            MeshCollider col = water.GetComponent<MeshCollider>();
-            if (col != null)
+            GameObject rocksContainer = GameObject.Find("LakeShorelineProps");
+            if (rocksContainer != null)
             {
-                col.isTrigger = true;
+                Object.DestroyImmediate(rocksContainer);
             }
 
-            // Position centered at (70f, -1.2f, -70f)
-            water.transform.position = new Vector3(70f, -1.2f, -70f);
-            
-            // Standard Plane is 10x10, so scale 17.0 makes it 170m wide, covering the basin perfectly
-            water.transform.localScale = new Vector3(17.0f, 1f, 17.0f);
-            water.transform.rotation = Quaternion.identity;
-
-            // Generate Transparent Water Material
-            Material waterMat = GetOrCreateMaterial("WaterMaterial", new Color(0.08f, 0.22f, 0.28f, 0.6f));
-            
-            Shader waterShader = Shader.Find("Universal Render Pipeline/Lit");
-            if (waterShader == null) waterShader = Shader.Find("Standard");
-            if (waterMat.shader != waterShader)
+            GameObject sunkenBus = GameObject.Find("SunkenBusInLake");
+            if (sunkenBus != null)
             {
-                waterMat.shader = waterShader;
+                Object.DestroyImmediate(sunkenBus);
             }
-
-            if (waterMat.shader.name.Contains("Universal Render Pipeline") || waterMat.shader.name.Contains("URP"))
-            {
-                waterMat.SetFloat("_Surface", 1f); // Transparent
-                waterMat.SetFloat("_Blend", 0f); // Alpha blend
-                waterMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                waterMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                waterMat.SetInt("_ZWrite", 0);
-                waterMat.SetColor("_BaseColor", new Color(0.08f, 0.22f, 0.28f, 0.6f));
-                waterMat.SetFloat("_Smoothness", 0.95f);
-                waterMat.SetFloat("_Metallic", 0.1f);
-                waterMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                waterMat.SetOverrideTag("RenderType", "Transparent");
-            }
-            else
-            {
-                waterMat.SetFloat("_Mode", 3f); // Transparent in Standard Shader
-                waterMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                waterMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                waterMat.SetInt("_ZWrite", 0);
-                waterMat.DisableKeyword("_ALPHATEST_ON");
-                waterMat.EnableKeyword("_ALPHABLEND_ON");
-                waterMat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                waterMat.SetColor("_Color", new Color(0.08f, 0.22f, 0.28f, 0.6f));
-                waterMat.SetFloat("_Glossiness", 0.95f);
-                waterMat.SetFloat("_Metallic", 0.1f);
-                waterMat.SetOverrideTag("RenderType", "Transparent");
-            }
-            
-            waterMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-
-            EditorUtility.SetDirty(waterMat);
-            AssetDatabase.SaveAssets();
-
-            water.GetComponent<Renderer>().sharedMaterial = waterMat;
         }
 
         private static void CreatePath(string name, Vector3 start, Vector3 end, float width)
@@ -1883,7 +1864,7 @@ namespace Antigravity.Editor
             float[,] paths = new float[,]
             {
                 // 1. Entrance -> Crossroads
-                { 0f, -108f, 0f, 30f, 3.4f, 4.5f, 0.03f },
+                { 0f, -143f, 0f, 30f, 3.4f, 4.5f, 0.03f },
                 // 2. Crossroads -> House
                 { 0f, 30f, 65f, 30f, 2.8f, 3.0f, 0.04f },
                 // 3. Crossroads -> Campsite
@@ -1893,7 +1874,7 @@ namespace Antigravity.Editor
                 // 5. Crossroads -> School (West Winding Trail)
                 { 0f, 30f, -200f, 40f, 3.0f, 6.5f, 0.02f },
                 // 6. Entrance -> Lake Shore (South-East Trail)
-                { 0f, -108f, 70f, -70f, 2.6f, 3.8f, 0.035f },
+                { 0f, -143f, 70f, -70f, 2.6f, 3.8f, 0.035f },
                 // 7. House -> Temple Forest Loop Shortcut
                 { 65f, 30f, 20f, 150f, 2.5f, 5.0f, 0.03f }
             };

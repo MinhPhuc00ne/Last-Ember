@@ -48,16 +48,7 @@ namespace Antigravity.Editor
         private static void AutoImportDownloadedPackages()
         {
             EditorApplication.delayCall -= AutoImportDownloadedPackages;
-            
-            // Check if Conifers BOTD is already imported in Assets
-            bool needsImport = !AssetDatabase.IsValidFolder("Assets/Conifers [BOTD]") && 
-                               !AssetDatabase.IsValidFolder("Assets/Flooded_Grounds") && 
-                               !AssetDatabase.IsValidFolder("Assets/Grass and Flowers Pack 1");
-
-            if (needsImport)
-            {
-                ImportAllDownloadedPackages();
-            }
+            // Packages are already imported into the project. Auto-import disabled to prevent re-extracting legacy PostProcessing.
         }
     }
 }

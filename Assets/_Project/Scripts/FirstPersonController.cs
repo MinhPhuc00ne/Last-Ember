@@ -43,7 +43,27 @@ namespace Antigravity
             _playerCamera = GetComponentInChildren<Camera>();
             if (_playerCamera == null)
             {
-                Debug.LogError("FirstPersonController: No camera found in children of Player GameObject!");
+                // Fallback 1: Search for MainCamera in scene and parent it
+                Camera mainCam = Camera.main;
+                if (mainCam != null)
+                {
+                    _playerCamera = mainCam;
+                    _playerCamera.transform.SetParent(transform);
+                    _playerCamera.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                    _playerCamera.transform.localRotation = Quaternion.identity;
+                }
+                else
+                {
+                    // Fallback 2: Create a new Camera under Player
+                    GameObject camObj = new GameObject("Main Camera");
+                    camObj.tag = "MainCamera";
+                    camObj.transform.SetParent(transform);
+                    camObj.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                    camObj.transform.localRotation = Quaternion.identity;
+                    _playerCamera = camObj.AddComponent<Camera>();
+                    camObj.AddComponent<AudioListener>();
+                    Debug.Log("FirstPersonController: Auto-created Main Camera under Player.");
+                }
             }
 
             UpdateCursorState();

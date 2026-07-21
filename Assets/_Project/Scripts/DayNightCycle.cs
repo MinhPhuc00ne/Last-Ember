@@ -10,6 +10,9 @@ namespace Antigravity
         
         public float timeOfDay = 0.35f; // Start in the morning/daytime by default
         
+        [Tooltip("Locks the day-night cycle permanently at daytime.")]
+        public bool isPermanentlyDay = true;
+
         [Tooltip("Locks the day-night cycle permanently at midnight.")]
         public bool isPermanentlyNight = false;
 
@@ -56,7 +59,11 @@ namespace Antigravity
         void Update()
         {
             // Advance time
-            if (isPermanentlyNight)
+            if (isPermanentlyDay)
+            {
+                timeOfDay = 0.35f; // Lock at bright daytime (10:00 AM)
+            }
+            else if (isPermanentlyNight)
             {
                 timeOfDay = 0f; // Lock at deep midnight
             }
