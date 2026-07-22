@@ -2405,131 +2405,47 @@ namespace Antigravity.Editor
         {
             EditorApplication.delayCall -= AutoSetupSchool;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
-            GameObject school = GameObject.Find("AbandonedSchool");
-            if (school != null)
-            {
-                // Check if the school is positioned approximately at target coordinates (-210, 40)
-                if (Mathf.Abs(school.transform.position.x - (-210f)) > 5f || Mathf.Abs(school.transform.position.z - 40f) > 5f)
-                {
-                    Object.DestroyImmediate(school);
-                }
-                else
-                {
-                    return;
-                }
-            }
             SetupSchool();
         }
 
         [MenuItem("Tools/Antigravity/Import and Setup School")]
         public static void SetupSchool()
         {
-            string fbxPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture.fbx";
-            string baseTexPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture.png";
-            string normalPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture_normal.png";
-            string emissionPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture_emission.png";
-            string metallicPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture_metallic.png";
-            string roughnessPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture_roughness.png";
-            string matPath = "Assets/Models/School/M_School.mat";
-
-            // 1. Configure Normal Map Import Settings
-            TextureImporter normalImporter = AssetImporter.GetAtPath(normalPath) as TextureImporter;
-            if (normalImporter != null && normalImporter.textureType != TextureImporterType.NormalMap)
-            {
-                normalImporter.textureType = TextureImporterType.NormalMap;
-                normalImporter.SaveAndReimport();
-            }
-
-            // 2. Create and setup Material
-            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-            bool isNewMaterial = false;
-            if (mat == null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-                if (shader == null) shader = Shader.Find("Standard");
-                mat = new Material(shader);
-                isNewMaterial = true;
-            }
-
-            Texture2D baseTex = AssetDatabase.LoadAssetAtPath<Texture2D>(baseTexPath);
-            Texture2D normalTex = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
-            Texture2D emissionTex = AssetDatabase.LoadAssetAtPath<Texture2D>(emissionPath);
-            Texture2D metallicTex = AssetDatabase.LoadAssetAtPath<Texture2D>(metallicPath);
-
-            if (mat.shader.name.Contains("Universal Render Pipeline") || mat.shader.name.Contains("URP"))
-            {
-                if (baseTex != null) mat.SetTexture("_BaseMap", baseTex);
-                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
-                if (emissionTex != null)
-                {
-                    mat.SetTexture("_EmissionMap", emissionTex);
-                    mat.SetColor("_EmissionColor", Color.white);
-                    mat.EnableKeyword("_EMISSION");
-                }
-                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
-                mat.SetFloat("_Smoothness", 0.5f);
-                mat.SetFloat("_Metallic", 0.2f);
-            }
-            else
-            {
-                if (baseTex != null) mat.SetTexture("_MainTex", baseTex);
-                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
-                if (emissionTex != null)
-                {
-                    mat.SetTexture("_EmissionMap", emissionTex);
-                    mat.SetColor("_EmissionColor", Color.white);
-                    mat.EnableKeyword("_EMISSION");
-                }
-                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
-                mat.SetFloat("_Glossiness", 0.5f);
-                mat.SetFloat("_Metallic", 0.2f);
-            }
-
-            if (isNewMaterial)
-            {
-                AssetDatabase.CreateAsset(mat, matPath);
-            }
-            else
-            {
-                EditorUtility.SetDirty(mat);
-            }
-            AssetDatabase.SaveAssets();
-
-            // 3. Load FBX and Place in Scene
-            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
-            if (fbxPrefab == null)
-            {
-                Debug.LogError("School FBX prefab not found at: " + fbxPath);
-                return;
-            }
-
-            GameObject school = GameObject.Find("AbandonedSchool");
-            while (school != null)
-            {
-                Object.DestroyImmediate(school);
-                school = GameObject.Find("AbandonedSchool");
-            }
-
-            school = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
-            if (school == null) return;
-
-            school.name = "AbandonedSchool";
-
-            // Position in West forest clearing (X = -210, Z = 40)
             float targetX = -210f;
             float targetZ = 40f;
             float height = GetTerrainHeight(targetX, targetZ);
+            float targetSize = 7500.0f;
+
+            GameObject school = GameObject.Find("AbandonedSchool");
+            if (school == null)
+            {
+                string fbxPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture.fbx";
+                GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+                if (fbxPrefab != null)
+                {
+                    school = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                }
+                else
+                {
+                    school = new GameObject("AbandonedSchool");
+                }
+            }
+
+            school.name = "AbandonedSchool";
             school.transform.position = new Vector3(targetX, height, targetZ);
             school.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
 
-            // Apply material to all Renderers
-            MeshRenderer[] renderers = school.GetComponentsInChildren<MeshRenderer>();
-            foreach (MeshRenderer r in renderers)
+            string matPath = "Assets/Models/School/M_School.mat";
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat != null)
             {
-                r.sharedMaterial = mat;
+                foreach (MeshRenderer r in school.GetComponentsInChildren<MeshRenderer>())
+                {
+                    r.sharedMaterial = mat;
+                }
             }
 
-            // Calculate bounds
+            // Calculate bounds & auto-scale to target 7500m
             Bounds combinedBounds = new Bounds();
             bool boundsInitialized = false;
             foreach (var filter in school.GetComponentsInChildren<MeshFilter>())
@@ -2563,13 +2479,11 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Calculate auto-scale to target 7500m size for a realistic spacious school courtyard (visual width ~72m)
-            float targetSize = 7500.0f;
             float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
             if (currentSize > 0.001f)
             {
                 float scaleVal = targetSize / currentSize;
-                school.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
+                school.transform.localScale = school.transform.localScale * scaleVal;
             }
             else
             {
@@ -2585,7 +2499,7 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Clear any trees near school position (X=-210, Z=40) within 65m radius so courtyard is open
+            // Clear any trees near school position (X=-210, Z=40) within 65m radius
             GameObject forest = GameObject.Find("Forest");
             if (forest != null)
             {
@@ -2602,154 +2516,59 @@ namespace Antigravity.Editor
                 {
                     Object.DestroyImmediate(tree);
                 }
-                if (treesToDelete.Count > 0)
-                {
-                    Debug.Log("Antigravity: Cleared " + treesToDelete.Count + " trees around the enlarged school clearing.");
-                }
-            }
-
-            // Disable fog to let the user inspect the school easily
-            RenderSettings.fog = false;
-            if (SceneView.lastActiveSceneView != null)
-            {
-                SceneView.lastActiveSceneView.sceneViewState.showFog = false;
-                SceneView.lastActiveSceneView.Repaint();
             }
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
 
-            Debug.Log("Antigravity: School successfully imported, materialized, scaled to human size, colliders added, and placed at (" + targetX + ", " + height + ", " + targetZ + ")!");
+            Debug.Log("Antigravity: School successfully updated, enlarged, and placed at (" + targetX + ", " + height + ", " + targetZ + ")!");
         }
 
         private static void AutoSetupBus()
         {
             EditorApplication.delayCall -= AutoSetupBus;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
-            GameObject bus = GameObject.Find("AbandonedBus");
-            if (bus != null)
-            {
-                if (Mathf.Abs(bus.transform.position.x - (-45f)) > 3f || Mathf.Abs(bus.transform.position.z - (-15f)) > 3f)
-                {
-                    Object.DestroyImmediate(bus);
-                }
-                else
-                {
-                    return;
-                }
-            }
             SetupBus();
         }
 
         [MenuItem("Tools/Antigravity/Import and Setup Bus")]
         public static void SetupBus()
         {
-            string fbxPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture.fbx";
-            string baseTexPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture.png";
-            string normalPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture_normal.png";
-            string emissionPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture_emission.png";
-            string metallicPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture_metallic.png";
-            string roughnessPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture_roughness.png";
-            string matPath = "Assets/Models/Bus/M_Bus.mat";
-
-            // 1. Configure Normal Map Import Settings
-            TextureImporter normalImporter = AssetImporter.GetAtPath(normalPath) as TextureImporter;
-            if (normalImporter != null && normalImporter.textureType != TextureImporterType.NormalMap)
-            {
-                normalImporter.textureType = TextureImporterType.NormalMap;
-                normalImporter.SaveAndReimport();
-            }
-
-            // 2. Create and setup Material
-            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-            bool isNewMaterial = false;
-            if (mat == null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-                if (shader == null) shader = Shader.Find("Standard");
-                mat = new Material(shader);
-                isNewMaterial = true;
-            }
-
-            Texture2D baseTex = AssetDatabase.LoadAssetAtPath<Texture2D>(baseTexPath);
-            Texture2D normalTex = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
-            Texture2D emissionTex = AssetDatabase.LoadAssetAtPath<Texture2D>(emissionPath);
-            Texture2D metallicTex = AssetDatabase.LoadAssetAtPath<Texture2D>(metallicPath);
-
-            if (mat.shader.name.Contains("Universal Render Pipeline") || mat.shader.name.Contains("URP"))
-            {
-                if (baseTex != null) mat.SetTexture("_BaseMap", baseTex);
-                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
-                if (emissionTex != null)
-                {
-                    mat.SetTexture("_EmissionMap", emissionTex);
-                    mat.SetColor("_EmissionColor", Color.white);
-                    mat.EnableKeyword("_EMISSION");
-                }
-                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
-                mat.SetFloat("_Smoothness", 0.5f);
-                mat.SetFloat("_Metallic", 0.2f);
-            }
-            else
-            {
-                if (baseTex != null) mat.SetTexture("_MainTex", baseTex);
-                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
-                if (emissionTex != null)
-                {
-                    mat.SetTexture("_EmissionMap", emissionTex);
-                    mat.SetColor("_EmissionColor", Color.white);
-                    mat.EnableKeyword("_EMISSION");
-                }
-                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
-                mat.SetFloat("_Glossiness", 0.5f);
-                mat.SetFloat("_Metallic", 0.2f);
-            }
-
-            if (isNewMaterial)
-            {
-                AssetDatabase.CreateAsset(mat, matPath);
-            }
-            else
-            {
-                EditorUtility.SetDirty(mat);
-            }
-            AssetDatabase.SaveAssets();
-
-            // 3. Load FBX and Place in Scene
-            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
-            if (fbxPrefab == null)
-            {
-                Debug.LogError("Bus FBX prefab not found at: " + fbxPath);
-                return;
-            }
-
-            GameObject bus = GameObject.Find("AbandonedBus");
-            while (bus != null)
-            {
-                Object.DestroyImmediate(bus);
-                bus = GameObject.Find("AbandonedBus");
-            }
-
-            bus = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
-            if (bus == null) return;
-
-            bus.name = "AbandonedBus";
-
-            // Position inside the forest along new trail branch at (X = -45, Z = -15)
             float targetX = -45.0f;
             float targetZ = -15.0f;
             float height = GetTerrainHeight(targetX, targetZ);
+            float targetSize = 18.0f;
+
+            GameObject bus = GameObject.Find("AbandonedBus");
+            if (bus == null)
+            {
+                string fbxPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture.fbx";
+                GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+                if (fbxPrefab != null)
+                {
+                    bus = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                }
+                else
+                {
+                    bus = new GameObject("AbandonedBus");
+                }
+            }
+
+            bus.name = "AbandonedBus";
             bus.transform.position = new Vector3(targetX, height, targetZ);
             bus.transform.rotation = Quaternion.Euler(-90f, 0f, 110f);
 
-            // Apply material to all Renderers
-            MeshRenderer[] renderers = bus.GetComponentsInChildren<MeshRenderer>();
-            foreach (MeshRenderer r in renderers)
+            string matPath = "Assets/Models/Bus/M_Bus.mat";
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat != null)
             {
-                r.sharedMaterial = mat;
+                foreach (MeshRenderer r in bus.GetComponentsInChildren<MeshRenderer>())
+                {
+                    r.sharedMaterial = mat;
+                }
             }
 
-            // Calculate bounds
+            // Calculate bounds & auto-scale to target 18.0m size
             Bounds combinedBounds = new Bounds();
             bool boundsInitialized = false;
             foreach (var filter in bus.GetComponentsInChildren<MeshFilter>())
@@ -2783,8 +2602,6 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Calculate auto-scale to target 18.0m size (scaled up for realistic large intercity bus)
-            float targetSize = 18.0f;
             float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
             if (currentSize > 0.001f)
             {
@@ -2822,129 +2639,40 @@ namespace Antigravity.Editor
                 {
                     Object.DestroyImmediate(tree);
                 }
-                if (treesToDelete.Count > 0)
-                {
-                    Debug.Log("Antigravity: Cleared " + treesToDelete.Count + " trees around the bus in the forest.");
-                }
             }
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
 
-            Debug.Log("Antigravity: Bus successfully imported, materialized, scaled to " + targetSize + "m length, colliders added, and placed at (" + targetX + ", " + height + ", " + targetZ + ")!");
+            Debug.Log("Antigravity: Bus successfully updated, enlarged, and moved to (" + targetX + ", " + height + ", " + targetZ + ")!");
         }
 
         private static void AutoSetupPicture()
         {
             EditorApplication.delayCall -= AutoSetupPicture;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
-            GameObject picture = GameObject.Find("CreepyPicture");
-            if (picture != null)
-            {
-                // Check if picture is attached to House
-                if (picture.transform.parent != null && picture.transform.parent.name == "House")
-                {
-                    return;
-                }
-                else
-                {
-                    Object.DestroyImmediate(picture);
-                }
-            }
             SetupPicture();
         }
 
         [MenuItem("Tools/Antigravity/Import and Setup Picture")]
         public static void SetupPicture()
         {
-            string fbxPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture.fbx";
-            string baseTexPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture.png";
-            string normalPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture_normal.png";
-            string emissionPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture_emission.png";
-            string metallicPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture_metallic.png";
-            string roughnessPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture_roughness.png";
-            string matPath = "Assets/Models/Picture/M_Picture.mat";
-
-            // 1. Configure Normal Map Import Settings
-            TextureImporter normalImporter = AssetImporter.GetAtPath(normalPath) as TextureImporter;
-            if (normalImporter != null && normalImporter.textureType != TextureImporterType.NormalMap)
-            {
-                normalImporter.textureType = TextureImporterType.NormalMap;
-                normalImporter.SaveAndReimport();
-            }
-
-            // 2. Create and setup Material
-            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-            bool isNewMaterial = false;
-            if (mat == null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-                if (shader == null) shader = Shader.Find("Standard");
-                mat = new Material(shader);
-                isNewMaterial = true;
-            }
-
-            Texture2D baseTex = AssetDatabase.LoadAssetAtPath<Texture2D>(baseTexPath);
-            Texture2D normalTex = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
-            Texture2D emissionTex = AssetDatabase.LoadAssetAtPath<Texture2D>(emissionPath);
-            Texture2D metallicTex = AssetDatabase.LoadAssetAtPath<Texture2D>(metallicPath);
-
-            if (mat.shader.name.Contains("Universal Render Pipeline") || mat.shader.name.Contains("URP"))
-            {
-                if (baseTex != null) mat.SetTexture("_BaseMap", baseTex);
-                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
-                if (emissionTex != null)
-                {
-                    mat.SetTexture("_EmissionMap", emissionTex);
-                    mat.SetColor("_EmissionColor", Color.white);
-                    mat.EnableKeyword("_EMISSION");
-                }
-                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
-                mat.SetFloat("_Smoothness", 0.5f);
-                mat.SetFloat("_Metallic", 0.2f);
-            }
-            else
-            {
-                if (baseTex != null) mat.SetTexture("_MainTex", baseTex);
-                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
-                if (emissionTex != null)
-                {
-                    mat.SetTexture("_EmissionMap", emissionTex);
-                    mat.SetColor("_EmissionColor", Color.white);
-                    mat.EnableKeyword("_EMISSION");
-                }
-                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
-                mat.SetFloat("_Glossiness", 0.5f);
-                mat.SetFloat("_Metallic", 0.2f);
-            }
-
-            if (isNewMaterial)
-            {
-                AssetDatabase.CreateAsset(mat, matPath);
-            }
-            else
-            {
-                EditorUtility.SetDirty(mat);
-            }
-            AssetDatabase.SaveAssets();
-
-            // 3. Load FBX and Place inside House wall at eye height
-            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
-            if (fbxPrefab == null)
-            {
-                Debug.LogError("Picture FBX prefab not found at: " + fbxPath);
-                return;
-            }
+            float targetSize = 1.2f;
 
             GameObject picture = GameObject.Find("CreepyPicture");
-            while (picture != null)
+            if (picture == null)
             {
-                Object.DestroyImmediate(picture);
-                picture = GameObject.Find("CreepyPicture");
+                string fbxPath = "Assets/Models/Picture/Meshy_AI_Heat_Studio_Framed_Po_0714102826_texture.fbx";
+                GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+                if (fbxPrefab != null)
+                {
+                    picture = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                }
+                else
+                {
+                    picture = new GameObject("CreepyPicture");
+                }
             }
-
-            picture = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
-            if (picture == null) return;
 
             picture.name = "CreepyPicture";
 
@@ -2965,14 +2693,18 @@ namespace Antigravity.Editor
                 picture.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
             }
 
-            // Apply material to all Renderers
-            MeshRenderer[] renderers = picture.GetComponentsInChildren<MeshRenderer>();
-            foreach (MeshRenderer r in renderers)
+            string matPath = "Assets/Models/Picture/M_Picture.mat";
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat != null)
             {
-                r.sharedMaterial = mat;
+                foreach (MeshRenderer r in picture.GetComponentsInChildren<MeshRenderer>())
+                {
+                    r.sharedMaterial = mat;
+                }
             }
 
-            // Calculate bounds
+            picture.transform.localScale = Vector3.one;
+
             Bounds combinedBounds = new Bounds();
             bool boundsInitialized = false;
             foreach (var filter in picture.GetComponentsInChildren<MeshFilter>())
@@ -3006,9 +2738,7 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Calculate auto-scale to target 1.2m size for a human-sized framed picture on the wall
-            float targetSize = 1.2f;
-            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
+            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.25f;
             if (currentSize > 0.001f)
             {
                 float scaleVal = targetSize / currentSize;
@@ -3016,7 +2746,7 @@ namespace Antigravity.Editor
             }
             else
             {
-                picture.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                picture.transform.localScale = new Vector3(1.2f, 1.2f, 1.2f);
             }
 
             // Add MeshColliders for collision
@@ -3031,7 +2761,7 @@ namespace Antigravity.Editor
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
 
-            Debug.Log("Antigravity: Picture successfully imported, materialized, scaled to " + targetSize + "m, colliders added, and placed at (" + targetX + ", " + (height + 1.2f) + ", " + targetZ + ")!");
+            Debug.Log("Antigravity: Picture successfully wall-mounted inside House!");
         }
 
         [MenuItem("Tools/Antigravity/Toggle Fog")]
