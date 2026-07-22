@@ -31,6 +31,7 @@ namespace Antigravity.Editor
         private static void AutoSetup()
         {
             EditorApplication.delayCall -= AutoSetup;
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             Setup(force: false);
         }
 
@@ -243,6 +244,12 @@ namespace Antigravity.Editor
             // 4e. Build Campsite with 3 Tents and Campfire near Lake
             CreateCampsite();
 
+            // 4f. Create Grand Forest Lake Basin, Shoreline Rocks, Grass and Lakeside Camp
+            CreateForestLakeWater();
+            ScatterLakeShorelineRocks();
+            ScatterLakeShorelineGrass();
+            CreateLakesideCamp();
+
             // Setup Vase and Oil Lamp configuration
             SetupHouseVase(house);
             ConfigureOilLampMaterial();
@@ -286,9 +293,9 @@ namespace Antigravity.Editor
             mesh.name = "Procedural Mountain Terrain";
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // Allow more than 65k vertices (500x500 grid)
 
-            int width = 500;
-            int depth = 500;
-            float spacing = 2.5f; // Total size = 1250x1250
+            int width = 550;
+            int depth = 550;
+            float spacing = 2.5f; // Total size = 1375x1375
             Vector3[] vertices = new Vector3[(width + 1) * (depth + 1)];
             int[] triangles = new int[width * depth * 6];
             Vector2[] uvs = new Vector2[vertices.Length];
@@ -307,7 +314,7 @@ namespace Antigravity.Editor
                     vertices[idx] = new Vector3(xPos, height, zPos);
                     uvs[idx] = new Vector2((float)x / width, (float)z / depth);
 
-                    // Calculate vertex weights for texture blending (R = Dirt Path, G = Rock Cliff)
+                    // Calculate vertex weights for texture blending (R = Dirt Path / Sand, G = Rock Cliff)
                     float pathDist = GetDistanceToPathNetwork(xPos, zPos, out float pathWidth);
                     float dirtWeight = 0f;
                     float halfWidth = pathWidth * 0.5f;
@@ -323,6 +330,14 @@ namespace Antigravity.Editor
                         dirtWeight = Mathf.SmoothStep(1.0f, 0.0f, norm);
                     }
 
+                    // Sand weight around Grand Forest Lake shoreline
+                    float distToLake = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(230f, 160f));
+                    float sandWeight = 0f;
+                    if (distToLake < 125f && height < 2.5f)
+                    {
+                        sandWeight = Mathf.Clamp01((2.5f - height) / 4.5f);
+                    }
+
                     // Rock weight on steep hillsides/mountains
                     float rockWeight = 0f;
                     if (height > 18f)
@@ -330,7 +345,7 @@ namespace Antigravity.Editor
                         rockWeight = Mathf.Clamp01((height - 18f) / 25f);
                     }
 
-                    colors[idx] = new Color(dirtWeight, rockWeight, 0f, 1f);
+                    colors[idx] = new Color(Mathf.Max(dirtWeight, sandWeight), rockWeight, 0f, 1f);
                 }
             }
 
@@ -428,6 +443,9 @@ namespace Antigravity.Editor
             float distToSchool = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(-200f, 40f));
             if (distToSchool < 35f) flatMask *= Mathf.SmoothStep(0f, 1f, (distToSchool - 15f) / 20f);
 
+            float distToLakeCamp = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(115f, 160f));
+            if (distToLakeCamp < 20f) flatMask *= Mathf.SmoothStep(0f, 1f, (distToLakeCamp - 8f) / 12f);
+
             height += (hillNoise1 + hillNoise2 + bumpNoise) * flatMask;
 
             // Path sunken rut depression (Winding dirt path profile)
@@ -450,9 +468,35 @@ namespace Antigravity.Editor
                 }
             }
 
+            // Grand Forest Lake Basin in East/North-East Corner (Center at X = 230, Z = 160)
+            float distToLake = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(230f, 160f));
+            if (distToLake < 145f)
+            {
+                float lakeHeight = 0f;
+                if (distToLake < 75f)
+                {
+                    // Deep central basin (Y = -12m to -2.5m)
+                    float t = distToLake / 75f;
+                    lakeHeight = Mathf.Lerp(-12f, -2.5f, t * t);
+                }
+                else if (distToLake < 115f)
+                {
+                    // Beach / Shoreline sloping up to Y = 2.0m
+                    float t = (distToLake - 75f) / 40f;
+                    lakeHeight = Mathf.Lerp(-2.5f, 2.0f, Mathf.SmoothStep(0f, 1f, t));
+                }
+                else
+                {
+                    // Smooth transition into forest floor
+                    float t = (distToLake - 115f) / 30f;
+                    lakeHeight = Mathf.Lerp(2.0f, height, Mathf.SmoothStep(0f, 1f, t));
+                }
+                height = lakeHeight;
+            }
+
             // High Mountains surrounding the valley
             float xMin = -280f;
-            float xMax = 280f;
+            float xMax = 360f;
             float zMin = -160f;
             float zMax = 330f;
 
@@ -484,150 +528,14 @@ namespace Antigravity.Editor
 
         private static void CreateGrassField()
         {
-            GameObject grassFolder = GameObject.Find("GrassField");
-            if (grassFolder != null)
+            string[] grassFolders = new string[] { "GrassField", "LakeGrass", "ForestLakeGrass" };
+            foreach (string name in grassFolders)
             {
-                Object.DestroyImmediate(grassFolder);
-            }
-            grassFolder = new GameObject("GrassField");
-
-            // Ensure Textures folder exists
-            if (!AssetDatabase.IsValidFolder("Assets/_Project/Textures"))
-            {
-                AssetDatabase.CreateFolder("Assets/_Project", "Textures");
-            }
-
-            // 1. Generate Tall Grass Blade Texture
-            string grassTexPath = "Assets/_Project/Textures/GrassBladeTexture.png";
-            if (!System.IO.File.Exists(grassTexPath))
-            {
-                Texture2D tex = new Texture2D(128, 128, TextureFormat.RGBA32, false);
-                for (int y = 0; y < 128; y++)
-                    for (int x = 0; x < 128; x++)
-                        tex.SetPixel(x, y, Color.clear);
-
-                for (int y = 0; y < 128; y++)
+                GameObject folder = GameObject.Find(name);
+                while (folder != null)
                 {
-                    float factor = (float)y / 128f;
-                    DrawRichBlade(tex, 64, y, factor, 14f, 0.15f, false);  // Center main blade
-                    DrawRichBlade(tex, 36, y, factor, 10f, -0.35f, false); // Left leaning blade
-                    DrawRichBlade(tex, 92, y, factor, 11f, 0.32f, false);  // Right leaning blade
-                    DrawRichBlade(tex, 20, y, factor, 8f, -0.5f, false);   // Far left blade
-                    DrawRichBlade(tex, 108, y, factor, 8f, 0.45f, false);  // Far right blade
-                }
-                tex.Apply();
-                System.IO.File.WriteAllBytes(grassTexPath, tex.EncodeToPNG());
-                AssetDatabase.Refresh();
-            }
-
-            // 2. Generate White Flower Meadow Texture
-            string flowerTexPath = "Assets/_Project/Textures/FlowerTexture.png";
-            if (!System.IO.File.Exists(flowerTexPath))
-            {
-                Texture2D tex = new Texture2D(128, 128, TextureFormat.RGBA32, false);
-                for (int y = 0; y < 128; y++)
-                    for (int x = 0; x < 128; x++)
-                        tex.SetPixel(x, y, Color.clear);
-
-                for (int y = 0; y < 128; y++)
-                {
-                    float factor = (float)y / 128f;
-                    DrawRichBlade(tex, 64, y, factor, 12f, 0.1f, true);   // Center blade with white flower head
-                    DrawRichBlade(tex, 32, y, factor, 9f, -0.3f, true);  // Left blade with white flower head
-                    DrawRichBlade(tex, 96, y, factor, 10f, 0.25f, true); // Right blade with white flower head
-                }
-                tex.Apply();
-                System.IO.File.WriteAllBytes(flowerTexPath, tex.EncodeToPNG());
-                AssetDatabase.Refresh();
-            }
-
-            Shader windShader = Shader.Find("Antigravity/GrassWindShader");
-            if (windShader == null) windShader = Shader.Find("Universal Render Pipeline/Lit");
-            if (windShader == null) windShader = Shader.Find("Standard");
-
-            // Grass Material
-            Material grassMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/GrassMaterial.mat");
-            if (grassMat == null || grassMat.shader != windShader)
-            {
-                grassMat = new Material(windShader);
-                Texture2D grassTex = AssetDatabase.LoadAssetAtPath<Texture2D>(grassTexPath);
-                if (grassMat.HasProperty("_BaseMap")) grassMat.SetTexture("_BaseMap", grassTex);
-                if (grassMat.HasProperty("_Cutoff")) grassMat.SetFloat("_Cutoff", 0.3f);
-                AssetDatabase.CreateAsset(grassMat, "Assets/_Project/Materials/GrassMaterial.mat");
-            }
-
-            // Flower Material
-            Material flowerMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/FlowerMaterial.mat");
-            if (flowerMat == null || flowerMat.shader != windShader)
-            {
-                flowerMat = new Material(windShader);
-                Texture2D flowerTex = AssetDatabase.LoadAssetAtPath<Texture2D>(flowerTexPath);
-                if (flowerMat.HasProperty("_BaseMap")) flowerMat.SetTexture("_BaseMap", flowerTex);
-                if (flowerMat.HasProperty("_Cutoff")) flowerMat.SetFloat("_Cutoff", 0.3f);
-                AssetDatabase.CreateAsset(flowerMat, "Assets/_Project/Materials/FlowerMaterial.mat");
-            }
-
-            // Mesh Quad template
-            GameObject tempQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            Mesh quadMesh = tempQuad.GetComponent<MeshFilter>().sharedMesh;
-            Object.DestroyImmediate(tempQuad);
-
-            int grassCount = 35000;
-            float fieldSize = 1000f;
-            float houseScale = HouseScaleVal;
-
-            for (int i = 0; i < grassCount; i++)
-            {
-                float x = Random.Range(-fieldSize / 2f, fieldSize / 2f);
-                float z = Random.Range(-fieldSize / 2f, fieldSize / 2f);
-
-                float distToCenter = Mathf.Sqrt(x * x + z * z);
-                if (distToCenter < 5f) continue;
-
-                // House clearance
-                if (Mathf.Abs(x - 65f) < 16f && Mathf.Abs(z - 30f) < 16f) continue;
-
-                // Campsite clearance
-                float distToCamp = Mathf.Sqrt((x - (-20f)) * (x - (-20f)) + (z - 22f) * (z - 22f));
-                if (distToCamp < 5f) continue;
-
-                // Temple clearance
-                float distToTemple = Mathf.Sqrt(x * x + (z - 250f) * (z - 250f));
-                if (distToTemple < 38f) continue;
-
-                // School clearance
-                float distToSchool = Mathf.Sqrt((x - (-200f)) * (x - (-200f)) + (z - 40f) * (z - 40f));
-                if (distToSchool < 42f) continue;
-
-                // Path clearance
-                if (IsNearAnyPath(x, z, 0.4f)) continue;
-
-                float terrainHeight = GetTerrainHeight(x, z);
-
-                GameObject grassCluster = new GameObject("Grass_" + i);
-                grassCluster.transform.SetParent(grassFolder.transform);
-                grassCluster.transform.position = new Vector3(x, terrainHeight, z);
-                
-                float scale = Random.Range(1.3f, 2.3f);
-                grassCluster.transform.localScale = new Vector3(scale, scale, scale);
-
-                Material activeMat = (Random.value < 0.35f) ? flowerMat : grassMat;
-
-                // 3-star quads for dense 3D volume from any angle (0, 60, 120 degrees)
-                float baseRot = Random.Range(0, 180);
-                for (int q = 0; q < 3; q++)
-                {
-                    GameObject quadObj = new GameObject("Q" + (q + 1));
-                    quadObj.transform.SetParent(grassCluster.transform);
-                    quadObj.transform.localPosition = new Vector3(0, 0.5f, 0);
-                    quadObj.transform.localRotation = Quaternion.Euler(0, baseRot + q * 60, 0);
-                    quadObj.transform.localScale = Vector3.one;
-
-                    MeshFilter mf = quadObj.AddComponent<MeshFilter>();
-                    mf.sharedMesh = quadMesh;
-                    MeshRenderer mr = quadObj.AddComponent<MeshRenderer>();
-                    mr.sharedMaterial = activeMat;
-                    mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    Object.DestroyImmediate(folder);
+                    folder = GameObject.Find(name);
                 }
             }
         }
@@ -842,6 +750,10 @@ namespace Antigravity.Editor
                     // 9. Dirt Trails / Paths Clearance
                     if (IsNearAnyPath(x, z, 3.2f)) continue;
 
+                    // 10. Grand Forest Lake Clearance (Center at 230, 160)
+                    float distToLake = Vector2.Distance(new Vector2(x, z), new Vector2(230f, 160f));
+                    if (distToLake < 125f) continue;
+
                     float terrainHeight = GetTerrainHeight(x, z);
 
                     GameObject chosenPrefab = pinePrefabs[Random.Range(0, pinePrefabs.Count)];
@@ -856,14 +768,14 @@ namespace Antigravity.Editor
                 }
 
                 // Outer Background Forest Trees on mountain slopes surrounding the fence
-                int bgTreeCount = 1500;
+                int bgTreeCount = 1800;
                 for (int i = 0; i < bgTreeCount; i++)
                 {
-                    float x = Random.Range(-450f, 450f);
+                    float x = Random.Range(-480f, 520f);
                     float z = Random.Range(-250f, 420f);
 
                     // Only place outside the inner fence perimeter
-                    if (x >= -248f && x <= 248f && z >= -133f && z <= 308f) continue;
+                    if (x >= -248f && x <= 358f && z >= -133f && z <= 328f) continue;
 
                     float terrainHeight = GetTerrainHeight(x, z);
 
@@ -968,9 +880,9 @@ namespace Antigravity.Editor
             }
 
             float minX = -250f;
-            float maxX = 250f;
+            float maxX = 360f;
             float minZ = -135f;
-            float maxZ = 310f;
+            float maxZ = 330f;
             float step = 3.0f; // Distance per segment
 
             Material fallbackMat = null;
@@ -2261,6 +2173,7 @@ namespace Antigravity.Editor
         private static void AutoSetupTemple()
         {
             EditorApplication.delayCall -= AutoSetupTemple;
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             GameObject temple = GameObject.Find("AncientTemple");
             if (temple != null)
             {
@@ -2472,6 +2385,7 @@ namespace Antigravity.Editor
         private static void AutoSetupSchool()
         {
             EditorApplication.delayCall -= AutoSetupSchool;
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             GameObject school = GameObject.Find("AbandonedSchool");
             if (school != null)
             {
@@ -2691,6 +2605,7 @@ namespace Antigravity.Editor
         private static void AutoSetupBus()
         {
             EditorApplication.delayCall -= AutoSetupBus;
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             GameObject bus = GameObject.Find("AbandonedBus");
             if (bus != null)
             {
@@ -2901,6 +2816,7 @@ namespace Antigravity.Editor
         private static void AutoSetupPicture()
         {
             EditorApplication.delayCall -= AutoSetupPicture;
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             GameObject picture = GameObject.Find("CreepyPicture");
             if (picture != null)
             {
@@ -3126,6 +3042,168 @@ namespace Antigravity.Editor
                     g /= pixels.Length;
                     b /= pixels.Length;
                     Debug.Log("Ground " + i + ": R=" + r + " G=" + g + " B=" + b + " - Path: " + path);
+                }
+            }
+        }
+
+        private static void CreateForestLakeWater()
+        {
+            GameObject water = GameObject.Find("ForestLakeWater");
+            if (water != null) Object.DestroyImmediate(water);
+
+            water = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            water.name = "ForestLakeWater";
+            
+            // Placed at lake center X = 230f, Z = 160f, Y = 1.5f (water surface level)
+            water.transform.position = new Vector3(230f, 1.5f, 160f);
+            water.transform.rotation = Quaternion.identity;
+            
+            // Scale 30x30 (Unity plane default 10m x 10m -> 300m x 300m water plane)
+            water.transform.localScale = new Vector3(30f, 1f, 30f);
+
+            Material waterMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/WaterMaterial.mat");
+            if (waterMat != null)
+            {
+                water.GetComponent<Renderer>().sharedMaterial = waterMat;
+            }
+            else
+            {
+                Debug.LogWarning("Antigravity: WaterMaterial.mat not found, creating fallback water material.");
+                Material fallbackWater = GetOrCreateMaterial("ForestWaterMaterial", new Color(0.1f, 0.35f, 0.5f, 0.7f));
+                water.GetComponent<Renderer>().sharedMaterial = fallbackWater;
+            }
+
+            MeshCollider waterCol = water.GetComponent<MeshCollider>();
+            if (waterCol != null)
+            {
+                waterCol.isTrigger = true;
+            }
+        }
+
+        private static void ScatterLakeShorelineRocks()
+        {
+            GameObject rocksFolder = GameObject.Find("ForestLakeShorelineRocks");
+            if (rocksFolder != null) Object.DestroyImmediate(rocksFolder);
+            rocksFolder = new GameObject("ForestLakeShorelineRocks");
+
+            string[] rockPaths = new string[]
+            {
+                "Assets/Flooded_Grounds/Prefabs/Nature/Rocks/Rock_A.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Rocks/Rock_B.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Rocks/CobbleRock_A.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Rocks/CobbleRock_B.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Rocks/CobbleRock_C.prefab"
+            };
+
+            System.Collections.Generic.List<GameObject> rockPrefabs = new System.Collections.Generic.List<GameObject>();
+            foreach (var path in rockPaths)
+            {
+                GameObject rock = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (rock != null) rockPrefabs.Add(rock);
+            }
+
+            if (rockPrefabs.Count > 0)
+            {
+                int rockCount = 65;
+                for (int i = 0; i < rockCount; i++)
+                {
+                    float angle = Random.Range(0f, 2f * Mathf.PI);
+                    float radius = Random.Range(116f, 126f);
+                    float x = 230f + Mathf.Cos(angle) * radius;
+                    float z = 160f + Mathf.Sin(angle) * radius;
+
+                    float y = GetTerrainHeight(x, z);
+
+                    GameObject chosenRock = rockPrefabs[Random.Range(0, rockPrefabs.Count)];
+                    GameObject rockObj = PrefabUtility.InstantiatePrefab(chosenRock, rocksFolder.transform) as GameObject;
+                    rockObj.name = "ShoreRock_" + i;
+                    rockObj.transform.position = new Vector3(x, y - 0.15f, z);
+                    rockObj.transform.rotation = Quaternion.Euler(Random.Range(-15f, 15f), Random.Range(0f, 360f), Random.Range(-15f, 15f));
+                    float scale = Random.Range(0.7f, 2.0f);
+                    rockObj.transform.localScale = new Vector3(scale, scale, scale);
+
+                    foreach (var filter in rockObj.GetComponentsInChildren<MeshFilter>())
+                    {
+                        if (filter.gameObject.GetComponent<MeshCollider>() == null)
+                        {
+                            filter.gameObject.AddComponent<MeshCollider>();
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void ScatterLakeShorelineGrass()
+        {
+            string[] grassFolders = new string[] { "ForestLakeGrass", "LakeGrass", "GrassField" };
+            foreach (string name in grassFolders)
+            {
+                GameObject folder = GameObject.Find(name);
+                while (folder != null)
+                {
+                    Object.DestroyImmediate(folder);
+                    folder = GameObject.Find(name);
+                }
+            }
+        }
+
+        private static void CreateLakesideCamp()
+        {
+            GameObject camp = GameObject.Find("LakesideCamp");
+            if (camp != null) Object.DestroyImmediate(camp);
+            camp = new GameObject("LakesideCamp");
+
+            float campX = 115f;
+            float campZ = 160f;
+            float groundY = GetTerrainHeight(campX, campZ);
+            camp.transform.position = new Vector3(campX, groundY, campZ);
+
+            // Campfire
+            string firePrefabPath = "Assets/PolygonPilots/Campfire/Prefabs/CampFire.prefab";
+            GameObject firePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(firePrefabPath);
+            if (firePrefab != null)
+            {
+                GameObject fireObj = PrefabUtility.InstantiatePrefab(firePrefab, camp.transform) as GameObject;
+                fireObj.name = "Campfire";
+                fireObj.transform.localPosition = Vector3.zero;
+                fireObj.transform.localScale = Vector3.one * 1.5f;
+
+                GameObject flameLight = new GameObject("EmberLight");
+                flameLight.transform.SetParent(fireObj.transform, false);
+                flameLight.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+                
+                Light lt = flameLight.AddComponent<Light>();
+                lt.type = LightType.Point;
+                lt.range = 10f;
+                lt.intensity = 1.2f;
+                lt.color = new Color(0.95f, 0.45f, 0.1f);
+                lt.shadows = LightShadows.Soft;
+                flameLight.AddComponent<LightFlicker>();
+            }
+
+            // Tents facing the water
+            string tentPrefabPath = "Assets/PolygonPilots/Campfire/Prefabs/Tent.prefab";
+            GameObject tentPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(tentPrefabPath);
+            if (tentPrefab != null)
+            {
+                Vector3[] tentPositions = new Vector3[]
+                {
+                    new Vector3(-4f, 0f, 3.5f),
+                    new Vector3(4.5f, 0f, 2.5f)
+                };
+                float[] tentRotations = new float[] { 135f, 225f };
+
+                for (int i = 0; i < 2; i++)
+                {
+                    float tX = campX + tentPositions[i].x;
+                    float tZ = campZ + tentPositions[i].z;
+                    float tY = GetTerrainHeight(tX, tZ);
+
+                    GameObject tent = PrefabUtility.InstantiatePrefab(tentPrefab, camp.transform) as GameObject;
+                    tent.name = "LakesideTent_" + (i + 1);
+                    tent.transform.position = new Vector3(tX, tY, tZ);
+                    tent.transform.rotation = Quaternion.Euler(0f, tentRotations[i], 0f);
+                    tent.transform.localScale = Vector3.one * 1.3f;
                 }
             }
         }

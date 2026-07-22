@@ -11,10 +11,8 @@ namespace Antigravity
         [SerializeField] private float _interactRange = 3.5f;
 
         private Camera _playerCamera;
-        private ItemPickup _currentHoveredPickup;
         private InspectableObject _currentHoveredInspectable;
 
-        public ItemPickup CurrentHoveredPickup => _currentHoveredPickup;
         public InspectableObject CurrentHoveredInspectable => _currentHoveredInspectable;
 
         private void Awake()
@@ -52,16 +50,13 @@ namespace Antigravity
 
             if (activeInspectable != null)
             {
-                _currentHoveredPickup = null;
                 _currentHoveredInspectable = null;
                 HandleInteractionInput();
                 return;
             }
 
-            // If the inventory screen is open (cursor is free), don't perform raycasts or pick up items
             if (Cursor.lockState != CursorLockMode.Locked)
             {
-                _currentHoveredPickup = null;
                 _currentHoveredInspectable = null;
                 return;
             }
@@ -79,24 +74,14 @@ namespace Antigravity
 
             if (Physics.Raycast(ray, out hit, _interactRange))
             {
-                ItemPickup pickup = hit.collider.GetComponent<ItemPickup>();
-                if (pickup != null)
-                {
-                    _currentHoveredPickup = pickup;
-                    _currentHoveredInspectable = null;
-                    return;
-                }
-
                 InspectableObject inspectable = hit.collider.GetComponent<InspectableObject>();
                 if (inspectable != null)
                 {
-                    _currentHoveredPickup = null;
                     _currentHoveredInspectable = inspectable;
                     return;
                 }
             }
 
-            _currentHoveredPickup = null;
             _currentHoveredInspectable = null;
         }
 
@@ -125,23 +110,6 @@ namespace Antigravity
                 else if (_currentHoveredInspectable != null)
                 {
                     _currentHoveredInspectable.StartInspection();
-                }
-            }
-
-            if (Keyboard.current.eKey.wasPressedThisFrame)
-            {
-                if (_currentHoveredPickup != null)
-                {
-                    // Interact to pick up
-                    _currentHoveredPickup.TryPickup();
-                }
-                else
-                {
-                    // Open inventory if not looking at an interactable
-                    if (InventoryUI.Instance != null)
-                    {
-                        InventoryUI.Instance.ToggleInventory();
-                    }
                 }
             }
         }

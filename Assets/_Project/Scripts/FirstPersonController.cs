@@ -11,6 +11,11 @@ namespace Antigravity
         public float jumpHeight = 1.5f;
         public float gravity = -9.81f;
 
+        [Header("Fly / Noclip Settings")]
+        public bool isFlyMode = false;
+        public float flySpeed = 25.0f;
+        public float fastFlySpeed = 100.0f;
+
         [Header("Look Settings")]
         public float mouseSensitivity = 0.15f;
         public float upperLookLimit = 80.0f;
@@ -78,18 +83,46 @@ namespace Antigravity
                 UpdateCursorState();
             }
 
-            if (!_isCursorLocked)
+            // Toggle Fly mode with V key
+            if (Keyboard.current != null && Keyboard.current.vKey.wasPressedThisFrame)
             {
-                return;
+                isFlyMode = !isFlyMode;
+                _velocity = Vector3.zero;
+                Debug.Log($"Fly Mode: {(isFlyMode ? "ENABLED" : "DISABLED")}");
             }
 
-            if (isInspecting)
+            // Quick Teleport Hotkeys
+            if (Keyboard.current != null)
+            {
+                // Key 1: Teleport to Folder 1 (Main Scene)
+                if (Keyboard.current.digit1Key.wasPressedThisFrame || Keyboard.current.numpad1Key.wasPressedThisFrame)
+                {
+                    TeleportTo(new Vector3(0f, 10f, -140f));
+                    Debug.Log("Teleported to Folder 1: Main Scene");
+                }
+                // Key 2: Teleport to Folder 2 (Lake Scene)
+                if (Keyboard.current.digit2Key.wasPressedThisFrame || Keyboard.current.numpad2Key.wasPressedThisFrame)
+                {
+                    TeleportTo(new Vector3(800f, 10f, 245f));
+                    Debug.Log("Teleported to Folder 2: Lake Scene");
+                }
+            }
+
+            if (!_isCursorLocked || isInspecting)
             {
                 return;
             }
 
             HandleLook();
-            HandleMovement();
+
+            if (isFlyMode)
+            {
+                HandleFlyMovement();
+            }
+            else
+            {
+                HandleMovement();
+            }
         }
 
         private void UpdateCursorState()
@@ -103,6 +136,20 @@ namespace Antigravity
             {
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
+            }
+        }
+
+        private void TeleportTo(Vector3 targetPos)
+        {
+            if (_characterController != null)
+            {
+                _characterController.enabled = false;
+                transform.position = targetPos;
+                _characterController.enabled = true;
+            }
+            else
+            {
+                transform.position = targetPos;
             }
         }
 
@@ -159,5 +206,51 @@ namespace Antigravity
             _velocity.y += gravity * Time.deltaTime;
             _characterController.Move(_velocity * Time.deltaTime);
         }
+
+        private void HandleFlyMovement()
+        {
+            float speed = (Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed) ? fastFlySpeed : flySpeed;
+
+            Vector3 flyDir = Vector3.zero;
+
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.wKey.isPressed) flyDir += _playerCamera.transform.forward;
+                if (Keyboard.current.sKey.isPressed) flyDir -= _playerCamera.transform.forward;
+                if (Keyboard.current.dKey.isPressed) flyDir += _playerCamera.transform.right;
+                if (Keyboard.current.aKey.isPressed) flyDir -= _playerCamera.transform.right;
+
+                if (Keyboard.current.eKey.isPressed || Keyboard.current.spaceKey.isPressed) flyDir += Vector3.up;
+                if (Keyboard.current.qKey.isPressed || Keyboard.current.leftCtrlKey.isPressed) flyDir -= Vector3.up;
+            }
+
+            if (flyDir.sqrMagnitude > 0.01f)
+            {
+                flyDir.Normalize();
+            }
+
+            if (_characterController != null) _characterController.enabled = false;
+            transform.position += flyDir * speed * Time.deltaTime;
+            if (_characterController != null) _characterController.enabled = true;
+        }
+
+        private void OnGUI()
+        {
+            GUIStyle style = new GUIStyle();
+            style.fontSize = 13;
+            style.normal.textColor = Color.white;
+            style.richText = true;
+
+            string flyStatus = isFlyMode ? "<color=#55FF55>[FLY MODE ACTIVE]</color>" : "<color=#FFFF55>[WALK MODE]</color>";
+            string text = $"<b>Antigravity Controls</b> {flyStatus}\n" +
+                         "• <b>[V]</b> Toggle Fly/Noclip (Hold <b>Shift</b> to fly at 100m/s)\n" +
+                         "• <b>[1]</b> Teleport to Folder 1 (Main Scene)\n" +
+                         "• <b>[2]</b> Teleport to Folder 2 (Lake Scene)\n" +
+                         "• <b>[ESC]</b> Toggle Mouse Lock";
+
+            GUI.Box(new Rect(10, 10, 390, 95), "");
+            GUI.Label(new Rect(20, 15, 370, 85), text, style);
+        }
     }
 }
+
