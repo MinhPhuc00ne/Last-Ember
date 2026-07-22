@@ -17,9 +17,6 @@ namespace Antigravity.Editor
             // Delay the call to make sure the editor and scene are fully loaded
             EditorApplication.delayCall += AutoSetup;
             EditorApplication.delayCall += AutoSetupTemple;
-            EditorApplication.delayCall += AutoSetupSchool;
-            EditorApplication.delayCall += AutoSetupBus;
-            EditorApplication.delayCall += AutoSetupPicture;
         }
 
         [MenuItem("Tools/Antigravity/Setup First Person Scene")]
