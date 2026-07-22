@@ -2480,6 +2480,7 @@ namespace Antigravity.Editor
             }
             else
             {
+                Debug.LogWarning("Antigravity Warning: The School FBX file at '" + fbxPath + "' is a Git LFS pointer file (133 bytes) without 3D mesh data. Falling back to procedural structure until real FBX is provided.");
                 // Create procedural 3D school building structure
                 school = new GameObject("AbandonedSchool");
                 school.transform.position = new Vector3(targetX, height, targetZ);
@@ -2642,6 +2643,7 @@ namespace Antigravity.Editor
             }
             else
             {
+                Debug.LogWarning("Antigravity Warning: The Bus FBX file at '" + fbxPath + "' is a Git LFS pointer file (133 bytes) without 3D mesh data. Falling back to procedural structure until real FBX is provided.");
                 // Create procedural 3D bus structure
                 bus = new GameObject("AbandonedBus");
                 bus.transform.position = new Vector3(targetX, height, targetZ);
