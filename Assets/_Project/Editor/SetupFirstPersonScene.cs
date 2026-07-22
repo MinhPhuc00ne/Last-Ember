@@ -1771,7 +1771,7 @@ namespace Antigravity.Editor
         {
             pathWidth = 3.2f;
 
-            // List of winding trail segments in the forest network:
+            // List of 14 winding trail segments in the forest reserve network:
             // (startX, startZ, endX, endZ, width, curveAmplitude, curveFrequency)
             float[,] paths = new float[,]
             {
@@ -1784,11 +1784,25 @@ namespace Antigravity.Editor
                 // 4. Crossroads -> Temple (North Winding Trail)
                 { 0f, 30f, 0f, 250f, 3.2f, 8.5f, 0.025f },
                 // 5. Crossroads -> School (West Winding Trail)
-                { 0f, 30f, -200f, 40f, 3.0f, 6.5f, 0.02f },
+                { 0f, 30f, -210f, 40f, 3.2f, 6.5f, 0.02f },
                 // 6. Entrance -> Lake Shore (South-East Trail)
                 { 0f, -143f, 70f, -70f, 2.6f, 3.8f, 0.035f },
                 // 7. House -> Temple Forest Loop Shortcut
-                { 65f, 30f, 20f, 150f, 2.5f, 5.0f, 0.03f }
+                { 65f, 30f, 20f, 150f, 2.5f, 5.0f, 0.03f },
+                // 8. House -> Forest Bus (New)
+                { 65f, 30f, -45f, -15f, 2.8f, 4.0f, 0.035f },
+                // 9. Bus -> School (New)
+                { -45f, -15f, -210f, 40f, 3.0f, 5.5f, 0.025f },
+                // 10. House -> Grand Forest Lake (New)
+                { 65f, 30f, 115f, 160f, 3.0f, 4.5f, 0.03f },
+                // 11. Temple -> Grand Forest Lake (New)
+                { 0f, 250f, 230f, 160f, 3.0f, 6.0f, 0.025f },
+                // 12. School -> Temple Forest Trail (New)
+                { -210f, 40f, 0f, 250f, 3.2f, 7.0f, 0.02f },
+                // 13. School -> Entrance Outer Trail (New)
+                { -210f, 40f, 0f, -143f, 3.0f, 8.0f, 0.02f },
+                // 14. Grand Lake -> Lakeside Camp Loop (New)
+                { 115f, 160f, 230f, 160f, 3.2f, 3.5f, 0.035f }
             };
 
             Vector2 point = new Vector2(x, z);
@@ -2389,8 +2403,8 @@ namespace Antigravity.Editor
             GameObject school = GameObject.Find("AbandonedSchool");
             if (school != null)
             {
-                // Check if the school is positioned approximately at target coordinates (-200, 40)
-                if (Mathf.Abs(school.transform.position.x - (-200f)) > 5f || Mathf.Abs(school.transform.position.z - 40f) > 5f)
+                // Check if the school is positioned approximately at target coordinates (-210, 40)
+                if (Mathf.Abs(school.transform.position.x - (-210f)) > 5f || Mathf.Abs(school.transform.position.z - 40f) > 5f)
                 {
                     Object.DestroyImmediate(school);
                 }
@@ -2495,8 +2509,8 @@ namespace Antigravity.Editor
 
             school.name = "AbandonedSchool";
 
-            // Position to the left of the house (House is at X=0, Z=15; place school at X=-200, Z=40)
-            float targetX = -200f;
+            // Position in West forest clearing (X = -210, Z = 40)
+            float targetX = -210f;
             float targetZ = 40f;
             float height = GetTerrainHeight(targetX, targetZ);
             school.transform.position = new Vector3(targetX, height, targetZ);
@@ -2543,8 +2557,8 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Calculate auto-scale to target 4800m size for a realistic human-scaled school (scaleVal approx 103x, visual size approx 47m)
-            float targetSize = 4800.0f;
+            // Calculate auto-scale to target 7500m size for a realistic spacious school courtyard (visual width ~72m)
+            float targetSize = 7500.0f;
             float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
             if (currentSize > 0.001f)
             {
@@ -2553,7 +2567,7 @@ namespace Antigravity.Editor
             }
             else
             {
-                school.transform.localScale = new Vector3(103f, 103f, 103f);
+                school.transform.localScale = new Vector3(160f, 160f, 160f);
             }
 
             // Add MeshColliders for collision
@@ -2565,7 +2579,7 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Clear any trees near school position (X=-200, Z=40) within 45m radius
+            // Clear any trees near school position (X=-210, Z=40) within 65m radius so courtyard is open
             GameObject forest = GameObject.Find("Forest");
             if (forest != null)
             {
@@ -2573,7 +2587,7 @@ namespace Antigravity.Editor
                 foreach (Transform tree in forest.transform)
                 {
                     float dist = Mathf.Sqrt((tree.position.x - targetX) * (tree.position.x - targetX) + (tree.position.z - targetZ) * (tree.position.z - targetZ));
-                    if (dist < 45f)
+                    if (dist < 65f)
                     {
                         treesToDelete.Add(tree.gameObject);
                     }
@@ -2584,7 +2598,7 @@ namespace Antigravity.Editor
                 }
                 if (treesToDelete.Count > 0)
                 {
-                    Debug.Log("Antigravity: Cleared " + treesToDelete.Count + " trees around the school clearing.");
+                    Debug.Log("Antigravity: Cleared " + treesToDelete.Count + " trees around the enlarged school clearing.");
                 }
             }
 
@@ -2609,7 +2623,7 @@ namespace Antigravity.Editor
             GameObject bus = GameObject.Find("AbandonedBus");
             if (bus != null)
             {
-                if (Mathf.Abs(bus.transform.position.x - (-9f)) > 2f || Mathf.Abs(bus.transform.position.z - 7f) > 2f)
+                if (Mathf.Abs(bus.transform.position.x - (-45f)) > 3f || Mathf.Abs(bus.transform.position.z - (-15f)) > 3f)
                 {
                     Object.DestroyImmediate(bus);
                 }
@@ -2714,9 +2728,9 @@ namespace Antigravity.Editor
 
             bus.name = "AbandonedBus";
 
-            // Position in front yard to the left of the house path
-            float targetX = -9.0f;
-            float targetZ = 7.0f;
+            // Position inside the forest along new trail branch at (X = -45, Z = -15)
+            float targetX = -45.0f;
+            float targetZ = -15.0f;
             float height = GetTerrainHeight(targetX, targetZ);
             bus.transform.position = new Vector3(targetX, height, targetZ);
             bus.transform.rotation = Quaternion.Euler(-90f, 0f, 110f);
@@ -2762,8 +2776,8 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Calculate auto-scale to target 11.0m size
-            float targetSize = 11.0f;
+            // Calculate auto-scale to target 18.0m size (scaled up for realistic large intercity bus)
+            float targetSize = 18.0f;
             float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
             if (currentSize > 0.001f)
             {
@@ -2772,7 +2786,7 @@ namespace Antigravity.Editor
             }
             else
             {
-                bus.transform.localScale = new Vector3(1f, 1f, 1f);
+                bus.transform.localScale = new Vector3(1.6f, 1.6f, 1.6f);
             }
 
             // Add MeshColliders for collision
@@ -2784,7 +2798,7 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Clear any trees near bus position within 6m radius
+            // Clear any trees near bus position (X=-45, Z=-15) within 15m radius
             GameObject forest = GameObject.Find("Forest");
             if (forest != null)
             {
@@ -2792,7 +2806,7 @@ namespace Antigravity.Editor
                 foreach (Transform tree in forest.transform)
                 {
                     float dist = Mathf.Sqrt((tree.position.x - targetX) * (tree.position.x - targetX) + (tree.position.z - targetZ) * (tree.position.z - targetZ));
-                    if (dist < 6f)
+                    if (dist < 15f)
                     {
                         treesToDelete.Add(tree.gameObject);
                     }
@@ -2803,7 +2817,7 @@ namespace Antigravity.Editor
                 }
                 if (treesToDelete.Count > 0)
                 {
-                    Debug.Log("Antigravity: Cleared " + treesToDelete.Count + " trees around the bus.");
+                    Debug.Log("Antigravity: Cleared " + treesToDelete.Count + " trees around the bus in the forest.");
                 }
             }
 
@@ -2820,13 +2834,14 @@ namespace Antigravity.Editor
             GameObject picture = GameObject.Find("CreepyPicture");
             if (picture != null)
             {
-                if (Mathf.Abs(picture.transform.position.x - (-2.8f)) > 1f || Mathf.Abs(picture.transform.position.z - 11.2f) > 1f)
+                // Check if picture is attached to House
+                if (picture.transform.parent != null && picture.transform.parent.name == "House")
                 {
-                    Object.DestroyImmediate(picture);
+                    return;
                 }
                 else
                 {
-                    return;
+                    Object.DestroyImmediate(picture);
                 }
             }
             SetupPicture();
@@ -2906,7 +2921,7 @@ namespace Antigravity.Editor
             }
             AssetDatabase.SaveAssets();
 
-            // 3. Load FBX and Place in Scene
+            // 3. Load FBX and Place inside House wall at eye height
             GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
             if (fbxPrefab == null)
             {
@@ -2925,12 +2940,22 @@ namespace Antigravity.Editor
 
             picture.name = "CreepyPicture";
 
-            // Position in front of the house, hanging/leaning on the front wall
-            float targetX = -2.8f;
-            float targetZ = 11.2f;
-            float height = GetTerrainHeight(targetX, targetZ);
-            picture.transform.position = new Vector3(targetX, height + 1.2f, targetZ);
-            picture.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+            // Mount on interior wall inside the House at human eye level (+1.65m height)
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                picture.transform.SetParent(house.transform, false);
+                picture.transform.localPosition = new Vector3(0.2f, 1.65f, -1.8f);
+                picture.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
+            else
+            {
+                float targetX = 65.2f;
+                float targetZ = 28.2f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                picture.transform.position = new Vector3(targetX, height + 1.65f, targetZ);
+                picture.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
 
             // Apply material to all Renderers
             MeshRenderer[] renderers = picture.GetComponentsInChildren<MeshRenderer>();
@@ -2949,7 +2974,7 @@ namespace Antigravity.Editor
                 Bounds localBounds = filter.sharedMesh.bounds;
                 Vector3 childScale = filter.transform.localScale;
                 Transform current = filter.transform;
-                while (current != null && current != picture.transform)
+                while (current != null && current != picture.transform && current != (house != null ? house.transform : null))
                 {
                     current = current.parent;
                     if (current != null && current != picture.transform)
@@ -2973,8 +2998,8 @@ namespace Antigravity.Editor
                 }
             }
 
-            // Calculate auto-scale to target 2.0m height/width
-            float targetSize = 2.0f;
+            // Calculate auto-scale to target 1.2m size for a human-sized framed picture on the wall
+            float targetSize = 1.2f;
             float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
             if (currentSize > 0.001f)
             {
@@ -2983,7 +3008,7 @@ namespace Antigravity.Editor
             }
             else
             {
-                picture.transform.localScale = new Vector3(1f, 1f, 1f);
+                picture.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
             }
 
             // Add MeshColliders for collision
