@@ -2414,88 +2414,92 @@ namespace Antigravity.Editor
             float targetX = -210f;
             float targetZ = 40f;
             float height = GetTerrainHeight(targetX, targetZ);
-            float targetSize = 7500.0f;
 
             GameObject school = GameObject.Find("AbandonedSchool");
-            if (school == null)
+            if (school != null)
             {
-                string fbxPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture.fbx";
-                GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
-                if (fbxPrefab != null)
+                Object.DestroyImmediate(school);
+            }
+
+            string fbxPath = "Assets/Models/School/Meshy_AI_Ivyclad_Courtyard_Rui_0714013114_texture.fbx";
+            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            bool hasValidMesh = false;
+            if (fbxPrefab != null)
+            {
+                MeshFilter mf = fbxPrefab.GetComponentInChildren<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null)
                 {
-                    school = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
-                }
-                else
-                {
-                    school = new GameObject("AbandonedSchool");
+                    hasValidMesh = true;
                 }
             }
 
-            school.name = "AbandonedSchool";
-            school.transform.position = new Vector3(targetX, height, targetZ);
-            school.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
-
-            string matPath = "Assets/Models/School/M_School.mat";
-            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-            if (mat != null)
+            if (hasValidMesh)
             {
-                foreach (MeshRenderer r in school.GetComponentsInChildren<MeshRenderer>())
-                {
-                    r.sharedMaterial = mat;
-                }
-            }
+                school = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                school.name = "AbandonedSchool";
+                school.transform.position = new Vector3(targetX, height, targetZ);
+                school.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
 
-            // Calculate bounds & auto-scale to target 7500m
-            Bounds combinedBounds = new Bounds();
-            bool boundsInitialized = false;
-            foreach (var filter in school.GetComponentsInChildren<MeshFilter>())
-            {
-                if (filter.sharedMesh == null) continue;
-                
-                Bounds localBounds = filter.sharedMesh.bounds;
-                Vector3 childScale = filter.transform.localScale;
-                Transform current = filter.transform;
-                while (current != null && current != school.transform)
+                float targetSize = 7500.0f;
+                Bounds combinedBounds = new Bounds();
+                bool boundsInitialized = false;
+                foreach (var filter in school.GetComponentsInChildren<MeshFilter>())
                 {
-                    current = current.parent;
-                    if (current != null && current != school.transform)
+                    if (filter.sharedMesh == null) continue;
+                    Bounds localBounds = filter.sharedMesh.bounds;
+                    Vector3 childScale = filter.transform.localScale;
+                    Transform current = filter.transform;
+                    while (current != null && current != school.transform)
                     {
-                        childScale = Vector3.Scale(childScale, current.localScale);
+                        current = current.parent;
+                        if (current != null && current != school.transform)
+                        {
+                            childScale = Vector3.Scale(childScale, current.localScale);
+                        }
+                    }
+                    Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
+                    Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
+                    Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
+                    if (!boundsInitialized)
+                    {
+                        combinedBounds = scaledBounds;
+                        boundsInitialized = true;
+                    }
+                    else
+                    {
+                        combinedBounds.Encapsulate(scaledBounds);
                     }
                 }
 
-                Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
-                Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
-                Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
-
-                if (!boundsInitialized)
+                float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
+                if (currentSize > 0.001f)
                 {
-                    combinedBounds = scaledBounds;
-                    boundsInitialized = true;
+                    float scaleVal = targetSize / currentSize;
+                    school.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
                 }
-                else
-                {
-                    combinedBounds.Encapsulate(scaledBounds);
-                }
-            }
-
-            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
-            if (currentSize > 0.001f)
-            {
-                float scaleVal = targetSize / currentSize;
-                school.transform.localScale = school.transform.localScale * scaleVal;
             }
             else
             {
-                school.transform.localScale = new Vector3(160f, 160f, 160f);
+                // Create procedural 3D school building structure
+                school = new GameObject("AbandonedSchool");
+                school.transform.position = new Vector3(targetX, height, targetZ);
+                school.transform.rotation = Quaternion.identity;
+                school.transform.localScale = Vector3.one;
+
+                string matPath = "Assets/Models/School/M_School.mat";
+                Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+                if (mat == null) mat = GetOrCreateMaterial("SchoolWallMaterial", new Color(0.35f, 0.32f, 0.28f));
+
+                BuildProceduralSchool(school, mat);
             }
 
-            // Add MeshColliders for collision
-            foreach (var filter in school.GetComponentsInChildren<MeshFilter>())
+            string matPathSchool = "Assets/Models/School/M_School.mat";
+            Material schoolMat = AssetDatabase.LoadAssetAtPath<Material>(matPathSchool);
+            if (schoolMat != null)
             {
-                if (filter.gameObject.GetComponent<MeshCollider>() == null)
+                foreach (MeshRenderer r in school.GetComponentsInChildren<MeshRenderer>())
                 {
-                    filter.gameObject.AddComponent<MeshCollider>();
+                    r.sharedMaterial = schoolMat;
                 }
             }
 
@@ -2521,7 +2525,42 @@ namespace Antigravity.Editor
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
 
-            Debug.Log("Antigravity: School successfully updated, enlarged, and placed at (" + targetX + ", " + height + ", " + targetZ + ")!");
+            Debug.Log("Antigravity: School successfully created and placed at (" + targetX + ", " + height + ", " + targetZ + ")!");
+        }
+
+        private static void BuildProceduralSchool(GameObject school, Material mat)
+        {
+            // Main Wing A
+            GameObject wingA = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wingA.name = "MainWing";
+            wingA.transform.SetParent(school.transform, false);
+            wingA.transform.localPosition = new Vector3(0f, 7.5f, 0f);
+            wingA.transform.localScale = new Vector3(55f, 15f, 20f);
+            wingA.GetComponent<Renderer>().sharedMaterial = mat;
+
+            // Left Wing B
+            GameObject wingB = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wingB.name = "LeftWing";
+            wingB.transform.SetParent(school.transform, false);
+            wingB.transform.localPosition = new Vector3(-27.5f, 6.0f, -20f);
+            wingB.transform.localScale = new Vector3(15f, 12f, 35f);
+            wingB.GetComponent<Renderer>().sharedMaterial = mat;
+
+            // Right Wing C
+            GameObject wingC = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wingC.name = "RightWing";
+            wingC.transform.SetParent(school.transform, false);
+            wingC.transform.localPosition = new Vector3(27.5f, 6.0f, -20f);
+            wingC.transform.localScale = new Vector3(15f, 12f, 35f);
+            wingC.GetComponent<Renderer>().sharedMaterial = mat;
+
+            // Courtyard Entrance Arch
+            GameObject arch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            arch.name = "CourtyardEntrance";
+            arch.transform.SetParent(school.transform, false);
+            arch.transform.localPosition = new Vector3(0f, 5.0f, -37.5f);
+            arch.transform.localScale = new Vector3(20f, 10f, 4f);
+            arch.GetComponent<Renderer>().sharedMaterial = mat;
         }
 
         private static void AutoSetupBus()
@@ -2537,88 +2576,92 @@ namespace Antigravity.Editor
             float targetX = -45.0f;
             float targetZ = -15.0f;
             float height = GetTerrainHeight(targetX, targetZ);
-            float targetSize = 18.0f;
 
             GameObject bus = GameObject.Find("AbandonedBus");
-            if (bus == null)
+            if (bus != null)
             {
-                string fbxPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture.fbx";
-                GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
-                if (fbxPrefab != null)
+                Object.DestroyImmediate(bus);
+            }
+
+            string fbxPath = "Assets/Models/Bus/Meshy_AI_Abandoned_Bus_in_an_O_0714102856_texture.fbx";
+            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            bool hasValidMesh = false;
+            if (fbxPrefab != null)
+            {
+                MeshFilter mf = fbxPrefab.GetComponentInChildren<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null)
                 {
-                    bus = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
-                }
-                else
-                {
-                    bus = new GameObject("AbandonedBus");
+                    hasValidMesh = true;
                 }
             }
 
-            bus.name = "AbandonedBus";
-            bus.transform.position = new Vector3(targetX, height, targetZ);
-            bus.transform.rotation = Quaternion.Euler(-90f, 0f, 110f);
-
-            string matPath = "Assets/Models/Bus/M_Bus.mat";
-            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-            if (mat != null)
+            if (hasValidMesh)
             {
-                foreach (MeshRenderer r in bus.GetComponentsInChildren<MeshRenderer>())
-                {
-                    r.sharedMaterial = mat;
-                }
-            }
+                bus = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                bus.name = "AbandonedBus";
+                bus.transform.position = new Vector3(targetX, height, targetZ);
+                bus.transform.rotation = Quaternion.Euler(-90f, 0f, 110f);
 
-            // Calculate bounds & auto-scale to target 18.0m size
-            Bounds combinedBounds = new Bounds();
-            bool boundsInitialized = false;
-            foreach (var filter in bus.GetComponentsInChildren<MeshFilter>())
-            {
-                if (filter.sharedMesh == null) continue;
-                
-                Bounds localBounds = filter.sharedMesh.bounds;
-                Vector3 childScale = filter.transform.localScale;
-                Transform current = filter.transform;
-                while (current != null && current != bus.transform)
+                float targetSize = 18.0f;
+                Bounds combinedBounds = new Bounds();
+                bool boundsInitialized = false;
+                foreach (var filter in bus.GetComponentsInChildren<MeshFilter>())
                 {
-                    current = current.parent;
-                    if (current != null && current != bus.transform)
+                    if (filter.sharedMesh == null) continue;
+                    Bounds localBounds = filter.sharedMesh.bounds;
+                    Vector3 childScale = filter.transform.localScale;
+                    Transform current = filter.transform;
+                    while (current != null && current != bus.transform)
                     {
-                        childScale = Vector3.Scale(childScale, current.localScale);
+                        current = current.parent;
+                        if (current != null && current != bus.transform)
+                        {
+                            childScale = Vector3.Scale(childScale, current.localScale);
+                        }
+                    }
+                    Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
+                    Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
+                    Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
+                    if (!boundsInitialized)
+                    {
+                        combinedBounds = scaledBounds;
+                        boundsInitialized = true;
+                    }
+                    else
+                    {
+                        combinedBounds.Encapsulate(scaledBounds);
                     }
                 }
 
-                Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
-                Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
-                Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
-
-                if (!boundsInitialized)
+                float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
+                if (currentSize > 0.001f)
                 {
-                    combinedBounds = scaledBounds;
-                    boundsInitialized = true;
+                    float scaleVal = targetSize / currentSize;
+                    bus.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
                 }
-                else
-                {
-                    combinedBounds.Encapsulate(scaledBounds);
-                }
-            }
-
-            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 0.015f;
-            if (currentSize > 0.001f)
-            {
-                float scaleVal = targetSize / currentSize;
-                bus.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
             }
             else
             {
-                bus.transform.localScale = new Vector3(1.6f, 1.6f, 1.6f);
+                // Create procedural 3D bus structure
+                bus = new GameObject("AbandonedBus");
+                bus.transform.position = new Vector3(targetX, height, targetZ);
+                bus.transform.rotation = Quaternion.Euler(0f, 110f, 0f);
+                bus.transform.localScale = Vector3.one;
+
+                string matPath = "Assets/Models/Bus/M_Bus.mat";
+                Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+                if (mat == null) mat = GetOrCreateMaterial("BusBodyMaterial", new Color(0.2f, 0.25f, 0.22f));
+
+                BuildProceduralBus(bus, mat);
             }
 
-            // Add MeshColliders for collision
-            foreach (var filter in bus.GetComponentsInChildren<MeshFilter>())
+            string matPathBus = "Assets/Models/Bus/M_Bus.mat";
+            Material busMat = AssetDatabase.LoadAssetAtPath<Material>(matPathBus);
+            if (busMat != null)
             {
-                if (filter.gameObject.GetComponent<MeshCollider>() == null)
+                foreach (MeshRenderer r in bus.GetComponentsInChildren<MeshRenderer>())
                 {
-                    filter.gameObject.AddComponent<MeshCollider>();
+                    r.sharedMaterial = busMat;
                 }
             }
 
@@ -2644,7 +2687,24 @@ namespace Antigravity.Editor
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
 
-            Debug.Log("Antigravity: Bus successfully updated, enlarged, and moved to (" + targetX + ", " + height + ", " + targetZ + ")!");
+            Debug.Log("Antigravity: Bus successfully created and placed at (" + targetX + ", " + height + ", " + targetZ + ")!");
+        }
+
+        private static void BuildProceduralBus(GameObject bus, Material mat)
+        {
+            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "BusBody";
+            body.transform.SetParent(bus.transform, false);
+            body.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+            body.transform.localScale = new Vector3(3.2f, 3.2f, 14f);
+            body.GetComponent<Renderer>().sharedMaterial = mat;
+
+            GameObject roof = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            roof.name = "BusRoof";
+            roof.transform.SetParent(bus.transform, false);
+            roof.transform.localPosition = new Vector3(0f, 3.4f, 0f);
+            roof.transform.localScale = new Vector3(3.0f, 0.4f, 13.8f);
+            roof.GetComponent<Renderer>().sharedMaterial = mat;
         }
 
         private static void AutoSetupPicture()
