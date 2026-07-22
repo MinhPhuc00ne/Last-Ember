@@ -250,6 +250,11 @@ namespace Antigravity.Editor
             ScatterLakeShorelineGrass();
             CreateLakesideCamp();
 
+            // 4g. Setup School, Bus, and Wall-mounted Picture inside House
+            SetupSchool();
+            SetupBus();
+            SetupPicture();
+
             // Setup Vase and Oil Lamp configuration
             SetupHouseVase(house);
             ConfigureOilLampMaterial();
@@ -2499,9 +2504,10 @@ namespace Antigravity.Editor
             }
 
             GameObject school = GameObject.Find("AbandonedSchool");
-            if (school != null)
+            while (school != null)
             {
                 Object.DestroyImmediate(school);
+                school = GameObject.Find("AbandonedSchool");
             }
 
             school = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
@@ -2718,9 +2724,10 @@ namespace Antigravity.Editor
             }
 
             GameObject bus = GameObject.Find("AbandonedBus");
-            if (bus != null)
+            while (bus != null)
             {
                 Object.DestroyImmediate(bus);
+                bus = GameObject.Find("AbandonedBus");
             }
 
             bus = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
@@ -2930,9 +2937,10 @@ namespace Antigravity.Editor
             }
 
             GameObject picture = GameObject.Find("CreepyPicture");
-            if (picture != null)
+            while (picture != null)
             {
                 Object.DestroyImmediate(picture);
+                picture = GameObject.Find("CreepyPicture");
             }
 
             picture = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
