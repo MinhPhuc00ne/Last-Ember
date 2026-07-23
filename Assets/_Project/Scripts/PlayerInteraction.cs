@@ -8,12 +8,12 @@ namespace Antigravity
         public static PlayerInteraction Instance { get; private set; }
 
         [Header("Interaction Settings")]
-        [SerializeField] private float _interactRange = 3.5f;
+        [SerializeField] private float _interactRange = 4.0f;
 
         private Camera _playerCamera;
-        private InspectableObject _currentHoveredInspectable;
+        private InteractableTrunk _currentHoveredTrunk;
 
-        public InspectableObject CurrentHoveredInspectable => _currentHoveredInspectable;
+        public InteractableTrunk CurrentHoveredTrunk => _currentHoveredTrunk;
 
         private void Awake()
         {
@@ -36,28 +36,9 @@ namespace Antigravity
 
         private void Update()
         {
-            // If currently inspecting an object, don't perform raycasts or standard interactions
-            InspectableObject activeInspectable = null;
-            var inspectables = FindObjectsByType<InspectableObject>(FindObjectsSortMode.None);
-            foreach (var ins in inspectables)
-            {
-                if (ins.IsBeingInspected)
-                {
-                    activeInspectable = ins;
-                    break;
-                }
-            }
-
-            if (activeInspectable != null)
-            {
-                _currentHoveredInspectable = null;
-                HandleInteractionInput();
-                return;
-            }
-
             if (Cursor.lockState != CursorLockMode.Locked)
             {
-                _currentHoveredInspectable = null;
+                _currentHoveredTrunk = null;
                 return;
             }
 
@@ -67,6 +48,7 @@ namespace Antigravity
 
         private void PerformRaycast()
         {
+            if (_playerCamera == null) _playerCamera = Camera.main;
             if (_playerCamera == null) return;
 
             Ray ray = _playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
@@ -74,44 +56,54 @@ namespace Antigravity
 
             if (Physics.Raycast(ray, out hit, _interactRange))
             {
-                InspectableObject inspectable = hit.collider.GetComponent<InspectableObject>();
-                if (inspectable != null)
+                InteractableTrunk trunk = hit.collider.GetComponentInParent<InteractableTrunk>();
+                if (trunk != null)
                 {
-                    _currentHoveredInspectable = inspectable;
+                    _currentHoveredTrunk = trunk;
                     return;
                 }
             }
 
-            _currentHoveredInspectable = null;
+            _currentHoveredTrunk = null;
         }
 
         private void HandleInteractionInput()
         {
             if (Keyboard.current == null) return;
 
-            // R key for inspection toggle
-            if (Keyboard.current.rKey.wasPressedThisFrame)
+            // E key for trunk open / close
+            if (Keyboard.current.eKey.wasPressedThisFrame && _currentHoveredTrunk != null)
             {
-                InspectableObject activeInspectable = null;
-                var inspectables = FindObjectsByType<InspectableObject>(FindObjectsSortMode.None);
-                foreach (var ins in inspectables)
-                {
-                    if (ins.IsBeingInspected)
-                    {
-                        activeInspectable = ins;
-                        break;
-                    }
-                }
-
-                if (activeInspectable != null)
-                {
-                    activeInspectable.StopInspection();
-                }
-                else if (_currentHoveredInspectable != null)
-                {
-                    _currentHoveredInspectable.StartInspection();
-                }
+                _currentHoveredTrunk.ToggleOpen();
             }
+        }
+
+        private void OnGUI()
+        {
+            if (_currentHoveredTrunk != null)
+            {
+                string prompt = _currentHoveredTrunk.GetPromptText();
+                DrawInteractionPrompt(prompt);
+            }
+        }
+
+        private void DrawInteractionPrompt(string text)
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.box);
+            style.fontSize = 18;
+            style.fontStyle = FontStyle.Bold;
+            style.alignment = TextAnchor.MiddleCenter;
+            style.normal.textColor = new Color(1.0f, 0.95f, 0.8f);
+
+            float width = 440f;
+            float height = 48f;
+            float posX = (Screen.width - width) / 2f;
+            float posY = Screen.height - 130f;
+
+            Color oldBg = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.05f, 0.05f, 0.08f, 0.85f);
+            GUI.Box(new Rect(posX, posY, width, height), text, style);
+            GUI.backgroundColor = oldBg;
         }
     }
 }

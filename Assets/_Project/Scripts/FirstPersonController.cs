@@ -43,6 +43,11 @@ namespace Antigravity
         void Start()
         {
             _characterController = GetComponent<CharacterController>();
+            if (_characterController != null)
+            {
+                _characterController.stepOffset = 0.6f;
+                _characterController.slopeLimit = 60.0f;
+            }
             
             // Try to find the camera in children
             _playerCamera = GetComponentInChildren<Camera>();
@@ -94,17 +99,11 @@ namespace Antigravity
             // Quick Teleport Hotkeys
             if (Keyboard.current != null)
             {
-                // Key 1: Teleport to Folder 1 (Main Scene)
+                // Key 1: Teleport to Main Scene Spawn
                 if (Keyboard.current.digit1Key.wasPressedThisFrame || Keyboard.current.numpad1Key.wasPressedThisFrame)
                 {
                     TeleportTo(new Vector3(0f, 10f, -140f));
-                    Debug.Log("Teleported to Folder 1: Main Scene");
-                }
-                // Key 2: Teleport to Folder 2 (Lake Scene)
-                if (Keyboard.current.digit2Key.wasPressedThisFrame || Keyboard.current.numpad2Key.wasPressedThisFrame)
-                {
-                    TeleportTo(new Vector3(800f, 10f, 245f));
-                    Debug.Log("Teleported to Folder 2: Lake Scene");
+                    Debug.Log("Teleported to Main Scene Spawn");
                 }
             }
 
@@ -244,12 +243,11 @@ namespace Antigravity
             string flyStatus = isFlyMode ? "<color=#55FF55>[FLY MODE ACTIVE]</color>" : "<color=#FFFF55>[WALK MODE]</color>";
             string text = $"<b>Antigravity Controls</b> {flyStatus}\n" +
                          "• <b>[V]</b> Toggle Fly/Noclip (Hold <b>Shift</b> to fly at 100m/s)\n" +
-                         "• <b>[1]</b> Teleport to Folder 1 (Main Scene)\n" +
-                         "• <b>[2]</b> Teleport to Folder 2 (Lake Scene)\n" +
+                         "• <b>[1]</b> Teleport to Spawn\n" +
                          "• <b>[ESC]</b> Toggle Mouse Lock";
 
-            GUI.Box(new Rect(10, 10, 390, 95), "");
-            GUI.Label(new Rect(20, 15, 370, 85), text, style);
+            GUI.Box(new Rect(10, 10, 390, 80), "");
+            GUI.Label(new Rect(20, 15, 370, 70), text, style);
         }
     }
 }

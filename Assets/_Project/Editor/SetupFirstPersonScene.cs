@@ -17,20 +17,208 @@ namespace Antigravity.Editor
             // Delay the call to make sure the editor and scene are fully loaded
             EditorApplication.delayCall += AutoSetup;
             EditorApplication.delayCall += AutoSetupTemple;
+            EditorApplication.delayCall += EnsureHousePropsExist;
         }
 
-        [MenuItem("Tools/Antigravity/Setup First Person Scene")]
+
+        [MenuItem("Tools/Antigravity/Setup First Person Scene (Reset to Default)")]
         public static void RunManualSetup()
         {
             Setup(force: true);
         }
 
+        [MenuItem("Tools/Antigravity/Chi cap nhat Ho & Trong cay quanh Ho (Khong mat do da chinh sua)")]
+        public static void UpdateLakeAndTreesOnly()
+        {
+            Debug.Log("Antigravity: Dang cap nhat long ho va trong cay quanh ho (Bao ton cac vat the da chinh sua)...");
+
+            // 1. Re-generate terrain mesh height for deeper lake basin
+            CreateProceduralTerrain();
+
+            // 2. Re-create lake water, rocks, grass, shoreline trees
+            CreateForestLakeWater();
+            ScatterLakeShorelineRocks();
+            ScatterLakeShorelineGrass();
+            ScatterLakeShorelineTrees();
+
+            EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+            Debug.Log("Antigravity: Cap nhat Ho & Trong cay quanh Ho thanh cong!");
+        }
+
         private static void AutoSetup()
         {
             EditorApplication.delayCall -= AutoSetup;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             Setup(force: false);
+            EnsureHousePropsExist();
         }
+
+        [MenuItem("Tools/Antigravity/Bo Ruong Da va Vat The vao Nha (Ensure House Props)")]
+        public static void EnsureHousePropsExist()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
+
+            GameObject player = GameObject.Find("Player");
+            if (player != null && player.GetComponent<PlayerInteraction>() == null)
+            {
+                player.AddComponent<PlayerInteraction>();
+            }
+
+            GameObject house = GameObject.Find("House");
+            if (house == null) return;
+
+            if (GameObject.Find("AshfallMap") == null) SetupMap();
+            if (GameObject.Find("CircleOfHands") == null) SetupHand();
+            if (GameObject.Find("OldRadio") == null) SetupRadio();
+            if (GameObject.Find("PaperNote") == null) SetupPaperNote();
+            if (GameObject.Find("HouseKey") == null) SetupKey();
+            if (GameObject.Find("LeatherTrunk") == null) SetupLeatherTrunk();
+
+            FixHouseEntranceAndTerrain();
+            DeleteLakeFolder();
+        }
+
+        [MenuItem("Tools/Antigravity/Xoa bo hoan toan Folder 2 - LakeScene")]
+        public static void DeleteLakeFolder()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
+
+            string[] foldersToDelete = new string[] { "Folder 2 - LakeScene", "LakeScene", "LakeProceduralTerrain", "LakeWater", "WoodenPier", "ShorelineRocks", "LakeForest", "LakeGrass", "LakeCampsite" };
+            bool deletedAny = false;
+
+            foreach (string name in foldersToDelete)
+            {
+                GameObject obj = GameObject.Find(name);
+                while (obj != null)
+                {
+                    Object.DestroyImmediate(obj);
+                    deletedAny = true;
+                    obj = GameObject.Find(name);
+                }
+            }
+
+            if (deletedAny)
+            {
+                EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                EditorSceneManager.SaveOpenScenes();
+                Debug.Log("Antigravity: Folder 2 - LakeScene va tat ca doi tuong Lake hoan toan bi xoa khoi Scene!");
+            }
+        }
+
+        [MenuItem("Tools/Antigravity/Sua Loi Door Entrance & Flatten House Terrain")]
+        public static void FixHouseEntranceAndTerrain()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
+
+            GameObject house = GameObject.Find("House");
+            GameObject terrainObj = GameObject.Find("ProceduralTerrain");
+
+            if (house != null && terrainObj != null)
+            {
+                Terrain terrain = terrainObj.GetComponent<Terrain>();
+                if (terrain != null && terrain.terrainData != null)
+                {
+                    TerrainData tData = terrain.terrainData;
+                    Vector3 terrainPos = terrain.transform.position;
+                    Vector3 housePos = house.transform.position;
+
+                    int mapWidth = tData.heightmapResolution;
+                    int mapHeight = tData.heightmapResolution;
+
+                    float houseLocalX = (housePos.x - terrainPos.x) / tData.size.x;
+                    float houseLocalZ = (housePos.z - terrainPos.z) / tData.size.z;
+
+                    int centerX = Mathf.RoundToInt(houseLocalX * (mapWidth - 1));
+                    int centerZ = Mathf.RoundToInt(houseLocalZ * (mapHeight - 1));
+
+                    int radius = 18; // 20m radius around house
+                    int startX = Mathf.Clamp(centerX - radius, 0, mapWidth - 1);
+                    int startZ = Mathf.Clamp(centerZ - radius, 0, mapHeight - 1);
+                    int width = Mathf.Min(centerX + radius, mapWidth - 1) - startX + 1;
+                    int height = Mathf.Min(centerZ + radius, mapHeight - 1) - startZ + 1;
+
+                    float[,] heights = tData.GetHeights(startX, startZ, width, height);
+
+                    // Target flat height slightly below house floor level
+                    float targetFlatHeight = (housePos.y - terrainPos.y - 0.15f) / tData.size.y;
+
+                    for (int z = 0; z < height; z++)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            heights[z, x] = targetFlatHeight;
+                        }
+                    }
+
+                    tData.SetHeights(startX, startZ, heights);
+                }
+
+                // 1. Clean up any oversized BoxColliders on prop items inside the house
+                string[] propNames = new string[] { "oldradio", "ashfallmap", "circleofhands", "creepypicture", "papernote", "door" };
+                foreach (Transform child in house.GetComponentsInChildren<Transform>())
+                {
+                    string childName = child.gameObject.name.ToLower();
+                    foreach (string propName in propNames)
+                    {
+                        if (childName.Contains(propName))
+                        {
+                            foreach (Collider col in child.GetComponentsInChildren<Collider>())
+                            {
+                                if (col != null && col is BoxCollider && col.bounds.size.x > 2.0f)
+                                {
+                                    Object.DestroyImmediate(col);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Ensure House walls, floor, and roof have solid MeshColliders so player CANNOT walk through walls!
+                foreach (MeshFilter mf in house.GetComponentsInChildren<MeshFilter>())
+                {
+                    if (mf == null || mf.sharedMesh == null) continue;
+                    GameObject go = mf.gameObject;
+                    string goName = go.name.ToLower();
+
+                    // Skip props (they have their own specific colliders like LeatherTrunk body)
+                    if (goName.Contains("radio") || goName.Contains("map") || goName.Contains("hand") || 
+                        goName.Contains("picture") || goName.Contains("trunk") || goName.Contains("key"))
+                    {
+                        continue;
+                    }
+
+                    MeshCollider mc = go.GetComponent<MeshCollider>();
+                    if (mc == null)
+                    {
+                        mc = go.AddComponent<MeshCollider>();
+                        mc.sharedMesh = mf.sharedMesh;
+                    }
+                }
+            }
+
+
+
+            // Ensure Player CharacterController has clean stepOffset and skinWidth
+            GameObject player = GameObject.Find("Player");
+            if (player != null)
+            {
+                CharacterController cc = player.GetComponent<CharacterController>();
+                if (cc != null)
+                {
+                    cc.stepOffset = 0.6f;
+                    cc.slopeLimit = 60f;
+                    cc.skinWidth = 0.08f;
+                    cc.minMoveDistance = 0.001f;
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            Debug.Log("Antigravity: House entrance door passage cleared and house ground terrain flattened!");
+        }
+
+
+
 
         private static void Setup(bool force)
         {
@@ -44,7 +232,7 @@ namespace Antigravity.Editor
             GameObject fence = GameObject.Find("ForestFence");
             GameObject campsite = GameObject.Find("Campsite");
             GameObject monster = GameObject.Find("MonsterEnemy");
-            
+
             // Check if the existing house is the old primitive cube house
             bool isPrimitiveHouse = house != null && house.transform.Find("Walls") != null;
 
@@ -64,7 +252,7 @@ namespace Antigravity.Editor
 
             bool needsExpansion = (fence != null && fence.transform.childCount < 300) || (forest != null && forest.transform.childCount < 2000);
 
-            if (player != null && terrain != null && grass != null && forest != null && house != null && shadowFigure != null && fence != null && campsite != null && monster == null && !isPrimitiveHouse && houseScaledCorrectly && !needsTerrainTexture && !needsExpansion && !force)
+            if (player != null && terrain != null && grass != null && forest != null && house != null && shadowFigure != null && fence != null && campsite != null && !isPrimitiveHouse && houseScaledCorrectly && !needsTerrainTexture && !needsExpansion && !force)
             {
                 // Already setup with prefabs and textures, skip auto setup
                 return;
@@ -121,6 +309,8 @@ namespace Antigravity.Editor
             }
             cc.height = 1.8f;
             cc.radius = 0.35f;
+            cc.stepOffset = 0.6f;
+            cc.slopeLimit = 60.0f;
             cc.center = Vector3.zero;
 
             // Add or configure FirstPersonController
@@ -129,6 +319,14 @@ namespace Antigravity.Editor
             {
                 fpc = player.AddComponent<FirstPersonController>();
             }
+
+            // Add or configure PlayerInteraction
+            PlayerInteraction pi = player.GetComponent<PlayerInteraction>();
+            if (pi == null)
+            {
+                pi = player.AddComponent<PlayerInteraction>();
+            }
+
 
             // Remove Capsule Collider because CharacterController already handles collision
             CapsuleCollider capCol = player.GetComponent<CapsuleCollider>();
@@ -170,7 +368,7 @@ namespace Antigravity.Editor
                     flashlight = new GameObject("Flashlight");
                     flashlight.transform.SetParent(mainCam.transform);
                 }
-                
+
                 flashlight.transform.localPosition = new Vector3(0.2f, -0.22f, 0.35f); // Position offset to bottom-right viewmodel
                 flashlight.transform.localRotation = Quaternion.identity;
 
@@ -180,7 +378,7 @@ namespace Antigravity.Editor
                 {
                     Object.DestroyImmediate(bodyTrans.gameObject);
                 }
-                
+
                 GameObject body = new GameObject("Body");
                 body.transform.SetParent(flashlight.transform);
                 body.transform.localPosition = Vector3.zero;
@@ -194,7 +392,7 @@ namespace Antigravity.Editor
                 handle.transform.localPosition = new Vector3(0f, 0f, 0f);
                 handle.transform.localScale = new Vector3(0.025f, 0.1f, 0.025f);
                 Object.DestroyImmediate(handle.GetComponent<Collider>());
-                
+
                 // Head (Cylinder)
                 GameObject head = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 head.name = "Head";
@@ -207,7 +405,7 @@ namespace Antigravity.Editor
                 Material flashMat = GetOrCreateMaterial("FlashlightMaterial", new Color(0.12f, 0.12f, 0.12f));
                 flashMat.SetFloat("_Smoothness", 0.75f);
                 flashMat.SetFloat("_Metallic", 0.85f);
-                
+
                 handle.GetComponent<Renderer>().sharedMaterial = flashMat;
                 head.GetComponent<Renderer>().sharedMaterial = flashMat;
 
@@ -241,16 +439,25 @@ namespace Antigravity.Editor
             // 4e. Build Campsite with 3 Tents and Campfire near Lake
             CreateCampsite();
 
-            // 4f. Create Grand Forest Lake Basin, Shoreline Rocks, Grass and Lakeside Camp
+            // 4f. Create Grand Forest Lake Basin, Shoreline Rocks, Grass, Trees and Lakeside Camp
             CreateForestLakeWater();
             ScatterLakeShorelineRocks();
             ScatterLakeShorelineGrass();
+            ScatterLakeShorelineTrees();
             CreateLakesideCamp();
 
-            // 4g. Setup School, Bus, and Wall-mounted Picture inside House
+            // 4g. Setup School, Bus, Picture, BienBao, Map, Hand, Radio, PaperNote, Key, and LeatherTrunk models
             SetupSchool();
             SetupBus();
             SetupPicture();
+            SetupBienBao();
+            SetupMap();
+            SetupHand();
+            SetupRadio();
+            SetupPaperNote();
+            SetupKey();
+            SetupLeatherTrunk();
+
 
             // Setup Vase and Oil Lamp configuration
             SetupHouseVase(house);
@@ -430,7 +637,7 @@ namespace Antigravity.Editor
             float hillNoise1 = Mathf.PerlinNoise(xPos * 0.007f + 42f, zPos * 0.007f + 42f) * 6.5f;
             float hillNoise2 = Mathf.PerlinNoise(xPos * 0.022f + 142f, zPos * 0.022f + 142f) * 3.0f;
             float bumpNoise  = Mathf.PerlinNoise(xPos * 0.07f + 242f, zPos * 0.07f + 242f) * 0.8f;
-            
+
             // Flattening mask around key structures so buildings sit flat
             float flatMask = 1.0f;
             float distToHouse = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(65f, 30f));
@@ -471,26 +678,27 @@ namespace Antigravity.Editor
             }
 
             // Grand Forest Lake Basin in East/North-East Corner (Center at X = 230, Z = 160)
+            // Lake gets progressively deeper as you venture further away from shore toward the lake center (càng ra xa càng sâu)
             float distToLake = Vector2.Distance(new Vector2(xPos, zPos), new Vector2(230f, 160f));
-            if (distToLake < 145f)
+            if (distToLake < 155f)
             {
                 float lakeHeight = 0f;
-                if (distToLake < 75f)
+                if (distToLake < 70f)
                 {
-                    // Deep central basin (Y = -12m to -2.5m)
-                    float t = distToLake / 75f;
-                    lakeHeight = Mathf.Lerp(-12f, -2.5f, t * t);
+                    // Deep central abyss basin (Y = -32.0m at center to -10.0m at 70m radius)
+                    float t = distToLake / 70f;
+                    lakeHeight = Mathf.Lerp(-32.0f, -10.0f, Mathf.SmoothStep(0f, 1f, t));
                 }
                 else if (distToLake < 115f)
                 {
-                    // Beach / Shoreline sloping up to Y = 2.0m
-                    float t = (distToLake - 75f) / 40f;
-                    lakeHeight = Mathf.Lerp(-2.5f, 2.0f, Mathf.SmoothStep(0f, 1f, t));
+                    // Sloping lake floor from -10.0m depth up to shoreline Y = 2.0m (water level Y = 1.5m)
+                    float t = (distToLake - 70f) / 45f;
+                    lakeHeight = Mathf.Lerp(-10.0f, 2.0f, Mathf.SmoothStep(0f, 1f, t));
                 }
                 else
                 {
                     // Smooth transition into forest floor
-                    float t = (distToLake - 115f) / 30f;
+                    float t = (distToLake - 115f) / 40f;
                     lakeHeight = Mathf.Lerp(2.0f, height, Mathf.SmoothStep(0f, 1f, t));
                 }
                 height = lakeHeight;
@@ -545,10 +753,10 @@ namespace Antigravity.Editor
         private static void DrawRichBlade(Texture2D tex, int baseX, int y, float factor, float startWidth, float lean, bool addFlowers)
         {
             if (y > 115) return;
-            
+
             float width = Mathf.Lerp(startWidth, 0.8f, factor);
             float currentX = baseX + (y * lean);
-            
+
             int startX = Mathf.RoundToInt(currentX - width / 2f);
             int endX = Mathf.RoundToInt(currentX + width / 2f);
 
@@ -557,8 +765,8 @@ namespace Antigravity.Editor
             Color midStalk = new Color(0.22f, 0.62f, 0.15f, 1f);
             Color brightTip = new Color(0.42f, 0.82f, 0.20f, 1f);
 
-            Color grassColor = factor < 0.5f 
-                ? Color.Lerp(darkRoot, midStalk, factor * 2f) 
+            Color grassColor = factor < 0.5f
+                ? Color.Lerp(darkRoot, midStalk, factor * 2f)
                 : Color.Lerp(midStalk, brightTip, (factor - 0.5f) * 2f);
 
             for (int x = startX; x <= endX; x++)
@@ -610,20 +818,20 @@ namespace Antigravity.Editor
             {
                 house = PrefabUtility.InstantiatePrefab(housePrefab) as GameObject;
                 house.name = "House";
-                
+
                 // Align house with terrain height (place it along the east trail branch at X = 65, Z = 30)
                 float terrainHeight = GetTerrainHeight(65f, 30f);
                 house.transform.position = new Vector3(65f, terrainHeight, 30f);
                 house.transform.rotation = Quaternion.Euler(0f, -90f, 0f); // Rotate to face West towards trail intersection
                 house.transform.localScale = new Vector3(HouseScaleVal, HouseScaleVal, HouseScaleVal);
-                
+
                 DecorateHouse(house);
             }
             else
             {
                 // Fallback to primitive stylized house if prefab is missing
                 Debug.LogWarning("Antigravity: Could not load House Prefab, falling back to primitives.");
-                
+
                 house = new GameObject("House");
                 house.transform.position = new Vector3(65f, GetTerrainHeight(65f, 30f), 30f);
                 house.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
@@ -754,7 +962,7 @@ namespace Antigravity.Editor
 
                     // 10. Grand Forest Lake Clearance (Center at 230, 160)
                     float distToLake = Vector2.Distance(new Vector2(x, z), new Vector2(230f, 160f));
-                    if (distToLake < 125f) continue;
+                    if (distToLake < 114f) continue;
 
                     float terrainHeight = GetTerrainHeight(x, z);
 
@@ -815,7 +1023,7 @@ namespace Antigravity.Editor
             else
             {
                 Debug.LogWarning("Antigravity: Could not load Tree Prefab, falling back to primitives.");
-                
+
                 Material trunkMat = GetOrCreateMaterial("TrunkMaterial", new Color(0.42f, 0.26f, 0.1f));
                 Material leavesMat = GetOrCreateMaterial("LeavesMaterial", new Color(0.12f, 0.38f, 0.16f));
 
@@ -1059,12 +1267,12 @@ namespace Antigravity.Editor
                 obs = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 obs.name = name;
             }
-            
+
             // Align obstacle with terrain surface
             float terrainHeight = GetTerrainHeight(pos.x, pos.z);
             obs.transform.position = new Vector3(pos.x, terrainHeight + scale.y / 2f, pos.z);
             obs.transform.localScale = scale;
-            
+
             Material mat = GetOrCreateMaterial(name + "_Mat", color);
             obs.GetComponent<Renderer>().sharedMaterial = mat;
         }
@@ -1106,7 +1314,7 @@ namespace Antigravity.Editor
                 }
                 mat = new Material(shader);
                 mat.name = "InvisibleMaterial";
-                
+
                 if (shader.name.Contains("Universal Render Pipeline") || shader.name.Contains("URP"))
                 {
                     mat.SetFloat("_Surface", 1f); // Transparent
@@ -1139,7 +1347,7 @@ namespace Antigravity.Editor
         private static void DecorateHouse(GameObject house)
         {
             if (house == null) return;
-            
+
             // Check if it's the primitive house
             bool isPrimitiveHouse = house.transform.Find("Walls") != null;
             if (isPrimitiveHouse)
@@ -1460,7 +1668,7 @@ namespace Antigravity.Editor
             {
                 lampViewModelGo = PrefabUtility.InstantiatePrefab(lampPrefab, mainCam.transform) as GameObject;
                 lampViewModelGo.name = "LampViewModel";
-                
+
                 // Position the lamp viewmodel beautifully in the hand area
                 lampViewModelGo.transform.localPosition = new Vector3(0.24f, -0.28f, 0.45f);
                 lampViewModelGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
@@ -1660,20 +1868,20 @@ namespace Antigravity.Editor
             {
                 Object.DestroyImmediate(pathGo);
             }
-            
+
             pathGo = new GameObject(name);
             pathGo.transform.position = Vector3.zero;
             pathGo.transform.rotation = Quaternion.identity;
-            
+
             Vector3 dir = (end - start).normalized;
             float dist = Vector3.Distance(start, end);
-            
+
             int segments = Mathf.CeilToInt(dist * 1.5f); // Subdivide for smooth terrain contour alignment
             float segLength = dist / segments;
 
             Mesh mesh = new Mesh();
             mesh.name = name + "_Mesh";
-            
+
             Vector3[] vertices = new Vector3[(segments + 1) * 2];
             int[] triangles = new int[segments * 6];
             Vector2[] uvs = new Vector2[vertices.Length];
@@ -1683,10 +1891,10 @@ namespace Antigravity.Editor
             for (int i = 0; i <= segments; i++)
             {
                 Vector3 center = start + dir * (i * segLength);
-                
+
                 Vector3 leftPoint = center - right;
                 Vector3 rightPoint = center + right;
-                
+
                 leftPoint.y = GetTerrainHeight(leftPoint.x, leftPoint.z) + 0.08f; // Elevate above ground so path mesh is clearly visible over terrain and grass
                 rightPoint.y = GetTerrainHeight(rightPoint.x, rightPoint.z) + 0.08f;
 
@@ -1721,7 +1929,7 @@ namespace Antigravity.Editor
             mf.sharedMesh = mesh;
 
             MeshRenderer mr = pathGo.AddComponent<MeshRenderer>();
-            
+
             Material pathMat = GetOrCreateMaterial("DirtPathMaterial", new Color(0.42f, 0.28f, 0.16f, 1.0f));
             pathMat.SetFloat("_Smoothness", 0.1f);
 
@@ -1733,7 +1941,7 @@ namespace Antigravity.Editor
             }
             if (pathMat.HasProperty("_BaseColor")) pathMat.SetColor("_BaseColor", new Color(0.42f, 0.28f, 0.16f, 1.0f));
             if (pathMat.HasProperty("_Color")) pathMat.SetColor("_Color", new Color(0.42f, 0.28f, 0.16f, 1.0f));
-            
+
             // Try to load ADG dirt texture
             string dirtDiffuse = "Assets/ThirdParty/ADG_Textures/ground_vol1/ground2/ground2_Diffuse.tga";
             Texture2D dirtTex = AssetDatabase.LoadAssetAtPath<Texture2D>(dirtDiffuse);
@@ -1753,9 +1961,9 @@ namespace Antigravity.Editor
 
             EditorUtility.SetDirty(pathMat);
             AssetDatabase.SaveAssets();
-            
+
             mr.sharedMaterial = pathMat;
-            
+
             GameObject terrain = GameObject.Find("ProceduralTerrain");
             if (terrain != null)
             {
@@ -1843,7 +2051,7 @@ namespace Antigravity.Editor
             proj = Mathf.Clamp(proj, 0f, len);
 
             // Sine & Perlin noise winding curve displacement
-            float curveOffset = Mathf.Sin(proj * frequency + (a.x * 0.1f)) * amplitude 
+            float curveOffset = Mathf.Sin(proj * frequency + (a.x * 0.1f)) * amplitude
                               + (Mathf.PerlinNoise(proj * 0.04f + a.x, proj * 0.04f + a.y) - 0.5f) * (amplitude * 1.2f);
 
             Vector2 pathPoint = a + dir * proj + perp * curveOffset;
@@ -1856,7 +2064,7 @@ namespace Antigravity.Editor
             Vector2 ap = p - a;
             float ab2 = Vector2.Dot(ab, ab);
             if (ab2 < 0.0001f) return Vector2.Distance(p, a);
-            
+
             float t = Vector2.Dot(ap, ab) / ab2;
             t = Mathf.Clamp01(t);
             Vector2 closest = a + t * ab;
@@ -1874,10 +2082,10 @@ namespace Antigravity.Editor
             // Create humanoid capsule representation
             shadow = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             shadow.name = "ShadowFigure";
-            
+
             // Adjust dimensions to look like a tall thin stalker
             shadow.transform.localScale = new Vector3(0.4f, 1.1f, 0.4f); // height will be 2.2m (capsule default is 2m, so 2 * 1.1 = 2.2m)
-            
+
             // Disable shadow receiving to look like a black silhouette void
             MeshRenderer mr = shadow.GetComponent<MeshRenderer>();
             if (mr != null)
@@ -1906,7 +2114,7 @@ namespace Antigravity.Editor
             // Attach ShadowFigure runtime controller script
             ShadowFigure sf = shadow.AddComponent<ShadowFigure>();
             sf.disappearDistance = 12f;
-            
+
             // Predefine 5 spawn locations behind trees bordering the front yard
             // Tree positions bordering the yard flat area (Z > 22m or X/Z combinations outside the 22m radius yard)
             sf.spawnPoints = new[]
@@ -1926,7 +2134,7 @@ namespace Antigravity.Editor
                 new Vector3(-5.5f, 0f, -1.0f), // Left Side Window
                 new Vector3(5.5f, 0f, -1.0f)   // Right Side Window
             };
-            
+
             sf.localWindowSpawns = new[]
             {
                 new Vector3(-2.0f, 0f, -8.0f), // Outside Front Left
@@ -1978,7 +2186,7 @@ namespace Antigravity.Editor
                 GameObject flameLight = new GameObject("EmberLight");
                 flameLight.transform.SetParent(fireObj.transform, false);
                 flameLight.transform.localPosition = new Vector3(0f, 0.35f, 0f);
-                
+
                 Light lt = flameLight.AddComponent<Light>();
                 lt.type = LightType.Point;
                 lt.range = 8f;
@@ -2189,6 +2397,7 @@ namespace Antigravity.Editor
         private static void AutoSetupTemple()
         {
             EditorApplication.delayCall -= AutoSetupTemple;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             GameObject temple = GameObject.Find("AncientTemple");
             if (temple != null)
@@ -2319,7 +2528,7 @@ namespace Antigravity.Editor
             foreach (var filter in temple.GetComponentsInChildren<MeshFilter>())
             {
                 if (filter.sharedMesh == null) continue;
-                
+
                 Bounds localBounds = filter.sharedMesh.bounds;
                 Vector3 childScale = filter.transform.localScale;
                 Transform current = filter.transform;
@@ -2401,6 +2610,7 @@ namespace Antigravity.Editor
         private static void AutoSetupSchool()
         {
             EditorApplication.delayCall -= AutoSetupSchool;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             SetupSchool();
         }
@@ -2564,6 +2774,7 @@ namespace Antigravity.Editor
         private static void AutoSetupBus()
         {
             EditorApplication.delayCall -= AutoSetupBus;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             SetupBus();
         }
@@ -2709,6 +2920,7 @@ namespace Antigravity.Editor
         private static void AutoSetupPicture()
         {
             EditorApplication.delayCall -= AutoSetupPicture;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || Application.isPlaying) return;
             if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "LakeScene") return;
             SetupPicture();
         }
@@ -2726,6 +2938,10 @@ namespace Antigravity.Editor
                 if (fbxPrefab != null)
                 {
                     picture = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                    if (picture != null)
+                    {
+                        PrefabUtility.UnpackPrefabInstance(picture, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                    }
                 }
                 else
                 {
@@ -2769,7 +2985,7 @@ namespace Antigravity.Editor
             foreach (var filter in picture.GetComponentsInChildren<MeshFilter>())
             {
                 if (filter.sharedMesh == null) continue;
-                
+
                 Bounds localBounds = filter.sharedMesh.bounds;
                 Vector3 childScale = filter.transform.localScale;
                 Transform current = filter.transform;
@@ -2823,6 +3039,775 @@ namespace Antigravity.Editor
             Debug.Log("Antigravity: Picture successfully wall-mounted inside House!");
         }
 
+        private static Material SetupPBRMaterial(string matPath, string baseTexPath, string normalTexPath = null, string metallicTexPath = null, string roughnessTexPath = null, string emissionTexPath = null)
+        {
+            if (!string.IsNullOrEmpty(normalTexPath))
+            {
+                TextureImporter normalImporter = AssetImporter.GetAtPath(normalTexPath) as TextureImporter;
+                if (normalImporter != null && normalImporter.textureType != TextureImporterType.NormalMap)
+                {
+                    normalImporter.textureType = TextureImporterType.NormalMap;
+                    normalImporter.SaveAndReimport();
+                }
+            }
+
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            bool isNew = false;
+            if (mat == null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) shader = Shader.Find("Standard");
+                mat = new Material(shader);
+                isNew = true;
+            }
+
+            Texture2D baseTex = !string.IsNullOrEmpty(baseTexPath) ? AssetDatabase.LoadAssetAtPath<Texture2D>(baseTexPath) : null;
+            Texture2D normalTex = !string.IsNullOrEmpty(normalTexPath) ? AssetDatabase.LoadAssetAtPath<Texture2D>(normalTexPath) : null;
+            Texture2D metallicTex = !string.IsNullOrEmpty(metallicTexPath) ? AssetDatabase.LoadAssetAtPath<Texture2D>(metallicTexPath) : null;
+            Texture2D roughnessTex = !string.IsNullOrEmpty(roughnessTexPath) ? AssetDatabase.LoadAssetAtPath<Texture2D>(roughnessTexPath) : null;
+            Texture2D emissionTex = !string.IsNullOrEmpty(emissionTexPath) ? AssetDatabase.LoadAssetAtPath<Texture2D>(emissionTexPath) : null;
+
+            bool isURP = mat.shader != null && (mat.shader.name.Contains("Universal Render Pipeline") || mat.shader.name.Contains("URP"));
+
+            if (isURP)
+            {
+                if (baseTex != null) mat.SetTexture("_BaseMap", baseTex);
+                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
+                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
+                if (roughnessTex != null) mat.SetTexture("_SpecGlossMap", roughnessTex);
+                if (emissionTex != null)
+                {
+                    mat.SetTexture("_EmissionMap", emissionTex);
+                    mat.SetColor("_EmissionColor", Color.white);
+                    mat.EnableKeyword("_EMISSION");
+                }
+                mat.SetFloat("_Smoothness", 0.5f);
+            }
+            else
+            {
+                if (baseTex != null) mat.SetTexture("_MainTex", baseTex);
+                if (normalTex != null) mat.SetTexture("_BumpMap", normalTex);
+                if (metallicTex != null) mat.SetTexture("_MetallicGlossMap", metallicTex);
+                if (emissionTex != null)
+                {
+                    mat.SetTexture("_EmissionMap", emissionTex);
+                    mat.SetColor("_EmissionColor", Color.white);
+                    mat.EnableKeyword("_EMISSION");
+                }
+                mat.SetFloat("_Glossiness", 0.5f);
+            }
+
+            if (isNew)
+            {
+                AssetDatabase.CreateAsset(mat, matPath);
+            }
+            else
+            {
+                EditorUtility.SetDirty(mat);
+            }
+            AssetDatabase.SaveAssets();
+            return mat;
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup BienBao (Signboard)")]
+        public static void SetupBienBao()
+        {
+            float targetSize = 2.4f; // ~2.4m height for entrance signboard
+            float targetX = 2.8f;
+            float targetZ = -138.0f; // Right near entrance gate where main character starts (player at 0, -143)
+            float height = GetTerrainHeight(targetX, targetZ);
+
+            GameObject bienbao = GameObject.Find("BienBao");
+            if (bienbao != null)
+            {
+                Object.DestroyImmediate(bienbao);
+            }
+
+            string fbxPath = "Assets/Models/bienbao/Meshy_AI_Ashfall_Nature_Reserv_0723061651_texture.fbx";
+            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            if (fbxPrefab != null)
+            {
+                bienbao = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                if (bienbao != null)
+                {
+                    PrefabUtility.UnpackPrefabInstance(bienbao, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
+            }
+
+            if (bienbao == null)
+            {
+                bienbao = new GameObject("BienBao");
+            }
+
+            bienbao.name = "BienBao";
+            bienbao.transform.position = new Vector3(targetX, height, targetZ);
+            bienbao.transform.rotation = Quaternion.Euler(-90f, 0f, 180f); // Facing south towards player start
+
+            Material mat = SetupPBRMaterial(
+                "Assets/Models/bienbao/M_BienBao.mat",
+                "Assets/Models/bienbao/Meshy_AI_Ashfall_Nature_Reserv_0723061651_texture.png",
+                "Assets/Models/bienbao/Meshy_AI_Ashfall_Nature_Reserv_0723061651_texture_normal.png",
+                "Assets/Models/bienbao/Meshy_AI_Ashfall_Nature_Reserv_0723061651_texture_metallic.png",
+                "Assets/Models/bienbao/Meshy_AI_Ashfall_Nature_Reserv_0723061651_texture_roughness.png",
+                "Assets/Models/bienbao/Meshy_AI_Ashfall_Nature_Reserv_0723061651_texture_emission.png"
+            );
+
+            foreach (MeshRenderer r in bienbao.GetComponentsInChildren<MeshRenderer>())
+            {
+                r.sharedMaterial = mat;
+            }
+
+            // Auto-scale based on mesh bounds
+            bienbao.transform.localScale = Vector3.one;
+            Bounds combinedBounds = new Bounds();
+            bool boundsInitialized = false;
+            foreach (var filter in bienbao.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh == null) continue;
+                Bounds localBounds = filter.sharedMesh.bounds;
+                Vector3 childScale = filter.transform.localScale;
+                Transform current = filter.transform;
+                while (current != null && current != bienbao.transform)
+                {
+                    current = current.parent;
+                    if (current != null && current != bienbao.transform)
+                    {
+                        childScale = Vector3.Scale(childScale, current.localScale);
+                    }
+                }
+                Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
+                Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
+                Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
+
+                if (!boundsInitialized)
+                {
+                    combinedBounds = scaledBounds;
+                    boundsInitialized = true;
+                }
+                else
+                {
+                    combinedBounds.Encapsulate(scaledBounds);
+                }
+            }
+
+            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 1.0f;
+            if (currentSize > 0.001f)
+            {
+                float scaleVal = targetSize / currentSize;
+                bienbao.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
+            }
+
+            // Add Colliders
+            foreach (var filter in bienbao.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.gameObject.GetComponent<Collider>() == null)
+                {
+                    filter.gameObject.AddComponent<MeshCollider>();
+                }
+            }
+
+            // Add InspectableObject
+            InspectableObject inspect = bienbao.GetComponent<InspectableObject>();
+            if (inspect == null) inspect = bienbao.AddComponent<InspectableObject>();
+            inspect.objectName = "Biển báo Khu Bảo tồn Ashfall";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: BienBao (Signboard) successfully placed near entrance gate!");
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup Map")]
+        public static void SetupMap()
+        {
+            float targetSize = 0.6f;
+
+            GameObject mapObj = GameObject.Find("AshfallMap");
+            if (mapObj != null)
+            {
+                Object.DestroyImmediate(mapObj);
+            }
+
+            string fbxPath = "Assets/Models/map/Meshy_AI_Ashfall_Lake_Mystery__0723062233_texture.fbx";
+            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            if (fbxPrefab != null)
+            {
+                mapObj = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                if (mapObj != null)
+                {
+                    PrefabUtility.UnpackPrefabInstance(mapObj, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
+            }
+
+            if (mapObj == null)
+            {
+                mapObj = new GameObject("AshfallMap");
+            }
+
+            mapObj.name = "AshfallMap";
+
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                mapObj.transform.SetParent(house.transform, false);
+                // Place on living dining table inside house
+                mapObj.transform.localPosition = new Vector3(1.4f, 0.78f, -2.0f);
+                mapObj.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
+            else
+            {
+                float targetX = 66.0f;
+                float targetZ = 28.0f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                mapObj.transform.position = new Vector3(targetX, height + 0.8f, targetZ);
+                mapObj.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
+
+            Material mat = SetupPBRMaterial(
+                "Assets/Models/map/M_Map.mat",
+                "Assets/Models/map/Meshy_AI_Ashfall_Lake_Mystery__0723062233_texture.png",
+                "Assets/Models/map/Meshy_AI_Ashfall_Lake_Mystery__0723062233_texture_normal.png",
+                "Assets/Models/map/Meshy_AI_Ashfall_Lake_Mystery__0723062233_texture_metallic.png",
+                "Assets/Models/map/Meshy_AI_Ashfall_Lake_Mystery__0723062233_texture_roughness.png",
+                "Assets/Models/map/Meshy_AI_Ashfall_Lake_Mystery__0723062233_texture_emission.png"
+            );
+
+            foreach (MeshRenderer r in mapObj.GetComponentsInChildren<MeshRenderer>())
+            {
+                r.sharedMaterial = mat;
+            }
+
+            mapObj.transform.localScale = Vector3.one;
+            Bounds combinedBounds = new Bounds();
+            bool boundsInitialized = false;
+            foreach (var filter in mapObj.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh == null) continue;
+                Bounds localBounds = filter.sharedMesh.bounds;
+                Vector3 childScale = filter.transform.localScale;
+                Transform current = filter.transform;
+                while (current != null && current != mapObj.transform && current != (house != null ? house.transform : null))
+                {
+                    current = current.parent;
+                    if (current != null && current != mapObj.transform)
+                    {
+                        childScale = Vector3.Scale(childScale, current.localScale);
+                    }
+                }
+                Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
+                Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
+                Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
+
+                if (!boundsInitialized)
+                {
+                    combinedBounds = scaledBounds;
+                    boundsInitialized = true;
+                }
+                else
+                {
+                    combinedBounds.Encapsulate(scaledBounds);
+                }
+            }
+
+            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 1.0f;
+            if (currentSize > 0.001f)
+            {
+                float scaleVal = targetSize / currentSize;
+                mapObj.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
+            }
+
+            foreach (var filter in mapObj.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh != null && filter.gameObject.GetComponent<Collider>() == null)
+                {
+                    BoxCollider box = filter.gameObject.AddComponent<BoxCollider>();
+                    box.center = filter.sharedMesh.bounds.center;
+                    box.size = filter.sharedMesh.bounds.size;
+                }
+            }
+
+
+            InspectableObject inspect = mapObj.GetComponent<InspectableObject>();
+            if (inspect == null) inspect = mapObj.AddComponent<InspectableObject>();
+            inspect.objectName = "Bản đồ bí ẩn Hồ Ashfall";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Map successfully placed inside House!");
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup Hand")]
+        public static void SetupHand()
+        {
+            float targetSize = 0.5f;
+
+            GameObject handObj = GameObject.Find("CircleOfHands");
+            if (handObj != null)
+            {
+                Object.DestroyImmediate(handObj);
+            }
+
+            string fbxPath = "Assets/Models/hand/Meshy_AI_Circle_of_Hands_0723062153_texture.fbx";
+            GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            if (fbxPrefab != null)
+            {
+                handObj = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                if (handObj != null)
+                {
+                    PrefabUtility.UnpackPrefabInstance(handObj, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
+            }
+
+            if (handObj == null)
+            {
+                handObj = new GameObject("CircleOfHands");
+            }
+
+            handObj.name = "CircleOfHands";
+
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                handObj.transform.SetParent(house.transform, false);
+                // Place on kitchen cabinet inside house
+                handObj.transform.localPosition = new Vector3(5.5f, 0.78f, 2.0f);
+                handObj.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
+            else
+            {
+                float targetX = 70.0f;
+                float targetZ = 32.0f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                handObj.transform.position = new Vector3(targetX, height + 0.8f, targetZ);
+                handObj.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
+
+            Material mat = SetupPBRMaterial(
+                "Assets/Models/hand/M_Hand.mat",
+                "Assets/Models/hand/Meshy_AI_Circle_of_Hands_0723062153_texture.png",
+                "Assets/Models/hand/Meshy_AI_Circle_of_Hands_0723062153_texture_normal.png",
+                "Assets/Models/hand/Meshy_AI_Circle_of_Hands_0723062153_texture_metallic.png",
+                "Assets/Models/hand/Meshy_AI_Circle_of_Hands_0723062153_texture_roughness.png",
+                "Assets/Models/hand/Meshy_AI_Circle_of_Hands_0723062153_texture_emission.png"
+            );
+
+            foreach (MeshRenderer r in handObj.GetComponentsInChildren<MeshRenderer>())
+            {
+                r.sharedMaterial = mat;
+            }
+
+            handObj.transform.localScale = Vector3.one;
+            Bounds combinedBounds = new Bounds();
+            bool boundsInitialized = false;
+            foreach (var filter in handObj.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh == null) continue;
+                Bounds localBounds = filter.sharedMesh.bounds;
+                Vector3 childScale = filter.transform.localScale;
+                Transform current = filter.transform;
+                while (current != null && current != handObj.transform && current != (house != null ? house.transform : null))
+                {
+                    current = current.parent;
+                    if (current != null && current != handObj.transform)
+                    {
+                        childScale = Vector3.Scale(childScale, current.localScale);
+                    }
+                }
+                Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
+                Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
+                Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
+
+                if (!boundsInitialized)
+                {
+                    combinedBounds = scaledBounds;
+                    boundsInitialized = true;
+                }
+                else
+                {
+                    combinedBounds.Encapsulate(scaledBounds);
+                }
+            }
+
+            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 1.0f;
+            if (currentSize > 0.001f)
+            {
+                float scaleVal = targetSize / currentSize;
+                handObj.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
+            }
+
+            foreach (var filter in handObj.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh != null && filter.gameObject.GetComponent<Collider>() == null)
+                {
+                    BoxCollider box = filter.gameObject.AddComponent<BoxCollider>();
+                    box.center = filter.sharedMesh.bounds.center;
+                    box.size = filter.sharedMesh.bounds.size;
+                }
+            }
+
+
+            InspectableObject inspect = handObj.GetComponent<InspectableObject>();
+            if (inspect == null) inspect = handObj.AddComponent<InspectableObject>();
+            inspect.objectName = "Vòng tay kì quái";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Hand successfully placed inside House!");
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup Radio")]
+        public static void SetupRadio()
+        {
+            float targetSize = 0.45f;
+
+            GameObject radioObj = GameObject.Find("OldRadio");
+            if (radioObj != null)
+            {
+                Object.DestroyImmediate(radioObj);
+            }
+
+            string prefabPath = "Assets/ThirdParty/Radio/Prefabs/Radio.prefab";
+            GameObject prefabObj = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefabObj != null)
+            {
+                radioObj = PrefabUtility.InstantiatePrefab(prefabObj) as GameObject;
+                if (radioObj != null)
+                {
+                    PrefabUtility.UnpackPrefabInstance(radioObj, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
+            }
+            else
+            {
+                string fbxPath = "Assets/ThirdParty/Radio/Meshes/Old Radio.fbx";
+                GameObject fbxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+                if (fbxPrefab != null)
+                {
+                    radioObj = PrefabUtility.InstantiatePrefab(fbxPrefab) as GameObject;
+                    if (radioObj != null)
+                    {
+                        PrefabUtility.UnpackPrefabInstance(radioObj, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                    }
+                }
+            }
+
+            if (radioObj == null)
+            {
+                radioObj = new GameObject("OldRadio");
+            }
+
+            radioObj.name = "OldRadio";
+
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                radioObj.transform.SetParent(house.transform, false);
+                // Place on side table / shelf inside house
+                radioObj.transform.localPosition = new Vector3(-1.8f, 0.78f, -2.2f);
+                radioObj.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
+            }
+            else
+            {
+                float targetX = 63.2f;
+                float targetZ = 27.8f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                radioObj.transform.position = new Vector3(targetX, height + 0.8f, targetZ);
+                radioObj.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
+            }
+
+            Material mat = SetupPBRMaterial(
+                "Assets/ThirdParty/Radio/Materials/M_RadioP.mat",
+                "Assets/ThirdParty/Radio/Textures/Old radio_low_Radio_BaseColor.png",
+                "Assets/ThirdParty/Radio/Textures/Old radio_low_Radio_Normal.png",
+                "Assets/ThirdParty/Radio/Textures/Old radio_low_Radio_Metallic.png",
+                "Assets/ThirdParty/Radio/Textures/Old radio_low_Radio_Roughness.png",
+                "Assets/ThirdParty/Radio/Textures/Old radio_low_Radio_Emissive.png"
+            );
+
+            foreach (MeshRenderer r in radioObj.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (r.sharedMaterial == null || r.sharedMaterial.shader == null || r.sharedMaterial.shader.name == "Hidden/InternalErrorShader")
+                {
+                    r.sharedMaterial = mat;
+                }
+            }
+
+            radioObj.transform.localScale = Vector3.one;
+            Bounds combinedBounds = new Bounds();
+            bool boundsInitialized = false;
+            foreach (var filter in radioObj.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh == null) continue;
+                Bounds localBounds = filter.sharedMesh.bounds;
+                Vector3 childScale = filter.transform.localScale;
+                Transform current = filter.transform;
+                while (current != null && current != radioObj.transform && current != (house != null ? house.transform : null))
+                {
+                    current = current.parent;
+                    if (current != null && current != radioObj.transform)
+                    {
+                        childScale = Vector3.Scale(childScale, current.localScale);
+                    }
+                }
+                Vector3 scaledSize = Vector3.Scale(localBounds.size, childScale);
+                Vector3 scaledCenter = Vector3.Scale(localBounds.center, childScale);
+                Bounds scaledBounds = new Bounds(scaledCenter, scaledSize);
+
+                if (!boundsInitialized)
+                {
+                    combinedBounds = scaledBounds;
+                    boundsInitialized = true;
+                }
+                else
+                {
+                    combinedBounds.Encapsulate(scaledBounds);
+                }
+            }
+
+            float currentSize = boundsInitialized ? Mathf.Max(combinedBounds.size.x, Mathf.Max(combinedBounds.size.y, combinedBounds.size.z)) : 1.0f;
+            if (currentSize > 0.001f)
+            {
+                float scaleVal = targetSize / currentSize;
+                radioObj.transform.localScale = new Vector3(scaleVal, scaleVal, scaleVal);
+            }
+
+            foreach (var filter in radioObj.GetComponentsInChildren<MeshFilter>())
+            {
+                if (filter.sharedMesh != null && filter.gameObject.GetComponent<Collider>() == null)
+                {
+                    BoxCollider box = filter.gameObject.AddComponent<BoxCollider>();
+                    box.center = filter.sharedMesh.bounds.center;
+                    box.size = filter.sharedMesh.bounds.size;
+                }
+            }
+
+
+            InspectableObject inspect = radioObj.GetComponent<InspectableObject>();
+            if (inspect == null) inspect = radioObj.AddComponent<InspectableObject>();
+            inspect.objectName = "Đài Radio Cổ";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Radio successfully placed inside House!");
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup Paper Note")]
+        public static void SetupPaperNote()
+        {
+            GameObject noteObj = GameObject.Find("PaperNote");
+            if (noteObj != null)
+            {
+                Object.DestroyImmediate(noteObj);
+            }
+
+            noteObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            noteObj.name = "PaperNote";
+
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                noteObj.transform.SetParent(house.transform, false);
+                // Flat on living room table near the map
+                noteObj.transform.localPosition = new Vector3(1.6f, 0.77f, -1.5f);
+                noteObj.transform.localRotation = Quaternion.Euler(0f, 15f, 0f);
+            }
+            else
+            {
+                float targetX = 66.6f;
+                float targetZ = 28.5f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                noteObj.transform.position = new Vector3(targetX, height + 0.8f, targetZ);
+                noteObj.transform.rotation = Quaternion.Euler(0f, 15f, 0f);
+            }
+
+            noteObj.transform.localScale = new Vector3(0.22f, 0.002f, 0.32f);
+
+            Material paperMat = GetOrCreateMaterial("PaperNoteMaterial", new Color(0.92f, 0.88f, 0.76f));
+            paperMat.SetFloat("_Smoothness", 0.1f);
+            paperMat.SetFloat("_Metallic", 0.0f);
+            noteObj.GetComponent<Renderer>().sharedMaterial = paperMat;
+
+            // Ensure BoxCollider present
+            BoxCollider col = noteObj.GetComponent<BoxCollider>();
+            if (col == null) col = noteObj.AddComponent<BoxCollider>();
+            col.size = new Vector3(1.2f, 10.0f, 1.2f); // Thicker trigger box for easy hover interaction
+
+            InspectableObject inspect = noteObj.GetComponent<InspectableObject>();
+            if (inspect == null) inspect = noteObj.AddComponent<InspectableObject>();
+            inspect.objectName = "Manh Mối - Giấy Note Bí Uẩn";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Paper Note successfully placed inside House!");
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup Key")]
+        public static void SetupKey()
+        {
+            GameObject keyObj = GameObject.Find("HouseKey");
+            if (keyObj != null)
+            {
+                Object.DestroyImmediate(keyObj);
+            }
+
+            keyObj = new GameObject("HouseKey");
+
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                keyObj.transform.SetParent(house.transform, false);
+                // On dining table near paper note and map
+                keyObj.transform.localPosition = new Vector3(1.1f, 0.77f, -2.3f);
+                keyObj.transform.localRotation = Quaternion.Euler(0f, -60f, 0f);
+            }
+            else
+            {
+                float targetX = 66.1f;
+                float targetZ = 27.7f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                keyObj.transform.position = new Vector3(targetX, height + 0.8f, targetZ);
+                keyObj.transform.rotation = Quaternion.Euler(0f, -60f, 0f);
+            }
+
+            // Create key material
+            Material keyMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/KeyMaterial.mat");
+            if (keyMat == null)
+            {
+                keyMat = GetOrCreateMaterial("KeyMaterial", new Color(0.85f, 0.72f, 0.25f));
+                keyMat.SetFloat("_Metallic", 0.85f);
+                keyMat.SetFloat("_Smoothness", 0.75f);
+            }
+            else
+            {
+                keyMat.SetColor("_BaseColor", new Color(0.85f, 0.72f, 0.25f));
+                keyMat.SetFloat("_Metallic", 0.85f);
+                keyMat.SetFloat("_Smoothness", 0.75f);
+            }
+
+            // Key Bow (Ring)
+            GameObject bow = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            bow.name = "KeyBow";
+            bow.transform.SetParent(keyObj.transform, false);
+            bow.transform.localPosition = new Vector3(0f, 0.005f, 0f);
+            bow.transform.localScale = new Vector3(0.08f, 0.005f, 0.08f);
+            bow.GetComponent<Renderer>().sharedMaterial = keyMat;
+            Object.DestroyImmediate(bow.GetComponent<Collider>());
+
+            // Key Shaft
+            GameObject shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            shaft.name = "KeyShaft";
+            shaft.transform.SetParent(keyObj.transform, false);
+            shaft.transform.localPosition = new Vector3(0f, 0.005f, -0.1f);
+            shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            shaft.transform.localScale = new Vector3(0.015f, 0.1f, 0.015f);
+            shaft.GetComponent<Renderer>().sharedMaterial = keyMat;
+            Object.DestroyImmediate(shaft.GetComponent<Collider>());
+
+            // Key Bit (Teeth)
+            GameObject bit = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bit.name = "KeyBit";
+            bit.transform.SetParent(keyObj.transform, false);
+            bit.transform.localPosition = new Vector3(0.02f, 0.005f, -0.17f);
+            bit.transform.localScale = new Vector3(0.035f, 0.008f, 0.04f);
+            bit.GetComponent<Renderer>().sharedMaterial = keyMat;
+            Object.DestroyImmediate(bit.GetComponent<Collider>());
+
+            // Add BoxCollider to keyObj for interaction
+            BoxCollider col = keyObj.AddComponent<BoxCollider>();
+            col.center = new Vector3(0f, 0f, -0.09f);
+            col.size = new Vector3(0.12f, 0.1f, 0.25f);
+
+            InspectableObject inspect = keyObj.GetComponent<InspectableObject>();
+            if (inspect == null) inspect = keyObj.AddComponent<InspectableObject>();
+            inspect.objectName = "Chìa Khóa Căn Nhà";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Key successfully placed inside House!");
+        }
+
+        [MenuItem("Tools/Antigravity/Import and Setup Leather Trunk")]
+        public static void SetupLeatherTrunk()
+        {
+            GameObject trunkObj = GameObject.Find("LeatherTrunk");
+            if (trunkObj != null)
+            {
+                Object.DestroyImmediate(trunkObj);
+            }
+
+            trunkObj = new GameObject("LeatherTrunk");
+
+            GameObject house = GameObject.Find("House");
+            if (house != null)
+            {
+                trunkObj.transform.SetParent(house.transform, false);
+                // Positioned in corner inside the house
+                trunkObj.transform.localPosition = new Vector3(-2.2f, 0.0f, 1.8f);
+                trunkObj.transform.localRotation = Quaternion.Euler(0f, 35f, 0f);
+            }
+
+            else
+            {
+                float targetX = 60.8f;
+                float targetZ = 33.8f;
+                float height = GetTerrainHeight(targetX, targetZ);
+                trunkObj.transform.position = new Vector3(targetX, height, targetZ);
+                trunkObj.transform.rotation = Quaternion.Euler(0f, 35f, 0f);
+            }
+
+            // Material
+            Material trunkMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/TrunkMaterial.mat");
+            if (trunkMat == null)
+            {
+                trunkMat = GetOrCreateMaterial("TrunkMaterial", new Color(0.42f, 0.26f, 0.1f));
+                trunkMat.SetFloat("_Smoothness", 0.5f);
+            }
+
+            Material metalMat = GetOrCreateMaterial("TrunkBrassMaterial", new Color(0.85f, 0.7f, 0.2f));
+            metalMat.SetFloat("_Metallic", 0.85f);
+            metalMat.SetFloat("_Smoothness", 0.75f);
+
+            // 1. Trunk Base Body Box
+            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "TrunkBody";
+            body.transform.SetParent(trunkObj.transform, false);
+            body.transform.localPosition = new Vector3(0f, 0.25f, 0f);
+            body.transform.localScale = new Vector3(1.1f, 0.5f, 0.65f);
+            body.GetComponent<Renderer>().sharedMaterial = trunkMat;
+
+            // 2. Lid Pivot Hinge (placed at top-back edge of trunk body)
+            GameObject lidPivot = new GameObject("LidPivot");
+            lidPivot.transform.SetParent(trunkObj.transform, false);
+            lidPivot.transform.localPosition = new Vector3(0f, 0.5f, -0.325f);
+            lidPivot.transform.localRotation = Quaternion.identity;
+
+            // 3. Lid Mesh
+            GameObject lid = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            lid.name = "LidMesh";
+            lid.transform.SetParent(lidPivot.transform, false);
+            lid.transform.localPosition = new Vector3(0f, 0.08f, 0.325f);
+            lid.transform.localScale = new Vector3(1.12f, 0.16f, 0.67f);
+            lid.GetComponent<Renderer>().sharedMaterial = trunkMat;
+
+            // 4. Brass Lock & Decorative Details
+            GameObject lockPlate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            lockPlate.name = "BrassLock";
+            lockPlate.transform.SetParent(lidPivot.transform, false);
+            lockPlate.transform.localPosition = new Vector3(0f, 0.04f, 0.66f);
+            lockPlate.transform.localScale = new Vector3(0.12f, 0.18f, 0.02f);
+            lockPlate.GetComponent<Renderer>().sharedMaterial = metalMat;
+            Object.DestroyImmediate(lockPlate.GetComponent<Collider>());
+
+            // Add InteractableTrunk component
+            InteractableTrunk trunkComp = trunkObj.GetComponent<InteractableTrunk>();
+            if (trunkComp == null) trunkComp = trunkObj.AddComponent<InteractableTrunk>();
+            trunkComp.trunkName = "Rương Da Cổ (Leather Trunk)";
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Leather Trunk successfully placed in corner of House with interactive opening capability!");
+        }
+
+
+
         [MenuItem("Tools/Antigravity/Toggle Fog")]
         public static void ToggleFog()
         {
@@ -2851,7 +3836,7 @@ namespace Antigravity.Editor
                         importer.isReadable = true;
                         importer.SaveAndReimport();
                     }
-                    
+
                     Color[] pixels = tex.GetPixels();
                     float r = 0, g = 0, b = 0;
                     foreach (Color c in pixels)
@@ -2875,31 +3860,76 @@ namespace Antigravity.Editor
 
             water = GameObject.CreatePrimitive(PrimitiveType.Plane);
             water.name = "ForestLakeWater";
-            
+
             // Placed at lake center X = 230f, Z = 160f, Y = 1.5f (water surface level)
             water.transform.position = new Vector3(230f, 1.5f, 160f);
             water.transform.rotation = Quaternion.identity;
-            
+
             // Scale 30x30 (Unity plane default 10m x 10m -> 300m x 300m water plane)
             water.transform.localScale = new Vector3(30f, 1f, 30f);
 
             Material waterMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/WaterMaterial.mat");
-            if (waterMat != null)
+            if (waterMat == null)
             {
-                water.GetComponent<Renderer>().sharedMaterial = waterMat;
+                waterMat = GetOrCreateMaterial("WaterMaterial", new Color(0.08f, 0.28f, 0.38f, 0.75f));
+            }
+
+            Shader waterShader = Shader.Find("Antigravity/WaterShaderV2");
+            if (waterShader != null)
+            {
+                waterMat.shader = waterShader;
+
+                // Configure Water Shader V2 properties
+                waterMat.SetColor("_BaseColor", new Color(0.08f, 0.28f, 0.38f, 0.75f));
+                waterMat.SetColor("_DeepWaterColor", new Color(0.02f, 0.10f, 0.20f, 0.92f));
+                waterMat.SetColor("_ShallowWaterColor", new Color(0.18f, 0.55f, 0.60f, 0.45f));
+                waterMat.SetColor("_FoamColor", new Color(0.92f, 0.96f, 1.00f, 0.85f));
+
+                waterMat.SetFloat("_NormalStrength", 0.65f);
+                waterMat.SetVector("_Wave1Speed", new Vector4(0.03f, 0.02f, 0f, 0f));
+                waterMat.SetVector("_Wave2Speed", new Vector4(-0.02f, 0.035f, 0f, 0f));
+
+                waterMat.SetFloat("_WaveAmplitude", 0.12f);
+                waterMat.SetFloat("_WaveFrequency", 1.2f);
+                waterMat.SetFloat("_WaveSpeed", 1.0f);
+
+                waterMat.SetFloat("_Smoothness", 0.92f);
+                waterMat.SetFloat("_Metallic", 0.08f);
+                waterMat.SetFloat("_FresnelPower", 3.5f);
+
+                waterMat.SetFloat("_FoamDistance", 1.5f);
+                waterMat.SetFloat("_FoamCutoff", 0.35f);
+
+                // Assign water ripple normal maps if present
+                Texture2D bump1 = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ThirdParty/ADG_Textures/ground_vol1/ground1/ground1_Normal.tga");
+                Texture2D bump2 = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ThirdParty/ADG_Textures/ground_vol1/ground6/ground6_Normal.tga");
+                if (bump1 != null) waterMat.SetTexture("_BumpMap", bump1);
+                if (bump2 != null) waterMat.SetTexture("_BumpMap2", bump2);
+
+                EditorUtility.SetDirty(waterMat);
+                AssetDatabase.SaveAssets();
             }
             else
             {
-                Debug.LogWarning("Antigravity: WaterMaterial.mat not found, creating fallback water material.");
-                Material fallbackWater = GetOrCreateMaterial("ForestWaterMaterial", new Color(0.1f, 0.35f, 0.5f, 0.7f));
-                water.GetComponent<Renderer>().sharedMaterial = fallbackWater;
+                Debug.LogWarning("Antigravity: Antigravity/WaterShaderV2 not found, using default shader.");
             }
+
+            water.GetComponent<Renderer>().sharedMaterial = waterMat;
 
             MeshCollider waterCol = water.GetComponent<MeshCollider>();
             if (waterCol != null)
             {
                 waterCol.isTrigger = true;
             }
+        }
+
+        [MenuItem("Tools/Antigravity/Cap nhat Shader Ho Nuoc V2.x (Water Shader V2)")]
+        public static void UpdateLakeWaterShader()
+        {
+            CreateForestLakeWater();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("Antigravity: Da cap nhat Water Shader V2.x cho Ho Nuoc thanh cong!");
         }
 
         private static void ScatterLakeShorelineRocks()
@@ -2969,6 +3999,62 @@ namespace Antigravity.Editor
             }
         }
 
+        private static void ScatterLakeShorelineTrees()
+        {
+            GameObject treeFolder = GameObject.Find("ForestLakeShorelineTrees");
+            if (treeFolder != null) Object.DestroyImmediate(treeFolder);
+            treeFolder = new GameObject("ForestLakeShorelineTrees");
+
+            string[] treePaths = new string[]
+            {
+                "Assets/Forst/Conifers [BOTD]/Render Pipeline Support/URP/Prefabs/PF Conifer Tall BOTD URP.prefab",
+                "Assets/Forst/Conifers [BOTD]/Render Pipeline Support/URP/Prefabs/PF Conifer Medium BOTD URP.prefab",
+                "Assets/Forst/Conifers [BOTD]/Render Pipeline Support/URP/Prefabs/PF Conifer Small BOTD URP.prefab",
+                "Assets/ThirdParty/ALP_Assets/Big Oak Tree FREE/Prefabs/OakBigTree01_pr.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Trees/TreeCreator_Tall_A.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Trees/TreeCreator_Tall_B.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Trees/TreeCreator_Small_A.prefab",
+                "Assets/Flooded_Grounds/Prefabs/Nature/Trees/TreeCreator_Crinkly_A.prefab"
+            };
+
+            System.Collections.Generic.List<GameObject> treePrefabs = new System.Collections.Generic.List<GameObject>();
+            foreach (var path in treePaths)
+            {
+                GameObject treePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (treePrefab != null) treePrefabs.Add(treePrefab);
+            }
+
+            if (treePrefabs.Count > 0)
+            {
+                int lakeTreeCount = 450;
+                for (int i = 0; i < lakeTreeCount; i++)
+                {
+                    float angle = Random.Range(0f, 2f * Mathf.PI);
+                    float radius = Random.Range(113f, 165f);
+                    float x = 230f + Mathf.Cos(angle) * radius;
+                    float z = 160f + Mathf.Sin(angle) * radius;
+
+                    // Exclude Lakeside Camp area (Center at 115, 160)
+                    float distToCamp = Vector2.Distance(new Vector2(x, z), new Vector2(115f, 160f));
+                    if (distToCamp < 22f) continue;
+
+                    // Exclude dirt paths
+                    if (IsNearAnyPath(x, z, 3.5f)) continue;
+
+                    float y = GetTerrainHeight(x, z);
+
+                    GameObject chosenTree = treePrefabs[Random.Range(0, treePrefabs.Count)];
+                    GameObject treeObj = PrefabUtility.InstantiatePrefab(chosenTree, treeFolder.transform) as GameObject;
+                    treeObj.name = "LakeTree_" + i;
+                    treeObj.transform.position = new Vector3(x, y, z);
+                    treeObj.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+
+                    float scale = Random.Range(0.85f, 1.55f);
+                    treeObj.transform.localScale = new Vector3(scale, scale, scale);
+                }
+            }
+        }
+
         private static void CreateLakesideCamp()
         {
             GameObject camp = GameObject.Find("LakesideCamp");
@@ -2993,7 +4079,7 @@ namespace Antigravity.Editor
                 GameObject flameLight = new GameObject("EmberLight");
                 flameLight.transform.SetParent(fireObj.transform, false);
                 flameLight.transform.localPosition = new Vector3(0f, 0.35f, 0f);
-                
+
                 Light lt = flameLight.AddComponent<Light>();
                 lt.type = LightType.Point;
                 lt.range = 10f;

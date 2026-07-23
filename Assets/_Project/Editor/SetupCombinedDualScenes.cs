@@ -29,8 +29,9 @@ namespace Antigravity.Editor
             {
                 "ProceduralTerrain", "LakeProceduralTerrain", "LakeWater", "WoodenPier",
                 "ShorelineRocks", "LakeForest", "LakeGrass", "GrassField", "House",
-                "ForestFence", "Forest", "IntersectionStreetLight", "HorrorEnvironment",
-                "ShadowFigure", "MonsterEnemy", "Campsite", "LakeCampsite", "SunsetLight", "Sunlight", "Moonlight"
+                "ForestFence", "Forest", "ForestLakeShorelineTrees", "IntersectionStreetLight", "HorrorEnvironment",
+                "ShadowFigure", "MonsterEnemy", "Campsite", "LakeCampsite", "SunsetLight", "Sunlight", "Moonlight",
+                "OldRadio", "PaperNote", "HouseKey", "LeatherTrunk"
             };
 
             foreach (string name in looseObjectsToClean)
@@ -54,8 +55,10 @@ namespace Antigravity.Editor
             // Move all newly generated Main Scene objects under Folder 1
             string[] mainObjects = new string[]
             {
-                "ProceduralTerrain", "GrassField", "House", "ForestFence", "Forest",
-                "Campsite", "Temple", "School", "AbandonedBus", "ShadowFigure",
+                "ProceduralTerrain", "GrassField", "House", "ForestFence", "Forest", "ForestLakeShorelineTrees",
+                "ForestLakeWater", "ForestLakeShorelineRocks", "LakesideCamp",
+                "Campsite", "Temple", "School", "AbandonedBus", "BienBao", "AshfallMap", "CircleOfHands",
+                "OldRadio", "PaperNote", "HouseKey", "LeatherTrunk", "ShadowFigure",
                 "MonsterEnemy", "IntersectionStreetLight", "HorrorEnvironment", "EnvironmentLighting"
             };
 
@@ -68,36 +71,8 @@ namespace Antigravity.Editor
                 }
             }
 
-            // 3. Create Parent Folder 2 (offset at X = 800)
-            GameObject lakeFolder = new GameObject(LakeFolderName);
-            lakeFolder.transform.position = LakeOffset;
-            lakeFolder.transform.rotation = Quaternion.identity;
-
-            // Generate Lake Scene objects in current active scene
-            SetupLakeScene.BuildLakeInActiveScene(cleanNonLakeObjects: false);
-
-            // Move all newly generated Lake Scene objects under Folder 2
-            string[] lakeObjects = new string[]
-            {
-                "LakeProceduralTerrain", "LakeWater", "WoodenPier",
-                "ShorelineRocks", "LakeForest", "LakeGrass"
-            };
-
-            foreach (string objName in lakeObjects)
-            {
-                GameObject go = GameObject.Find(objName);
-                if (go != null && go != mainFolder && go != lakeFolder && go.transform.parent == null)
-                {
-                    go.transform.SetParent(lakeFolder.transform, false);
-                }
-            }
-
-            GameObject lakeCamp = GameObject.Find("Campsite");
-            if (lakeCamp != null && lakeCamp.transform.parent == null)
-            {
-                lakeCamp.name = "LakeCampsite";
-                lakeCamp.transform.SetParent(lakeFolder.transform, false);
-            }
+            // Clean up any remaining LakeScene objects
+            SetupFirstPersonScene.DeleteLakeFolder();
 
             // 4. Player Setup
             GameObject player = GameObject.Find("Player");
